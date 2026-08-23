@@ -1,0 +1,5 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { ParticleLife } from '../src/engine.js';
+test('seed is deterministic',()=>{const a=new ParticleLife({count:100,seed:'same'}),b=new ParticleLife({count:100,seed:'same'});assert.deepEqual([...a.matrix],[...b.matrix]);assert.deepEqual([...a.x],[...b.x]);});
+test('uniform grid indexes every particle once',()=>{const s=new ParticleLife({count:1000,width:800,height:600,radius:30});s.buildGrid();let seen=0;for(const h of s.head){for(let i=h;i!==-1;i=s.next[i])seen++;}assert.equal(seen,1000);assert.ok(s.head.length < s.count);});
+test('preset JSON round trip',()=>{const a=new ParticleLife({count:1234,types:4,seed:'roundtrip'}),json=JSON.parse(JSON.stringify(a.exportPreset())),b=new ParticleLife();b.importPreset(json);assert.equal(b.count,1234);assert.equal(b.types,4);assert.deepEqual([...b.matrix],[...a.matrix]);});
+test('step keeps wrapped particles in bounds',()=>{const s=new ParticleLife({count:2000,width:640,height:480});for(let n=0;n<5;n++)s.step();for(let i=0;i<s.count;i++){assert.ok(s.x[i]>=0&&s.x[i]<s.width);assert.ok(s.y[i]>=0&&s.y[i]<s.height);}});
