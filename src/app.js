@@ -105,14 +105,22 @@ for (const id of ['radius','damping','force','dt']) $(id).addEventListener('inpu
   const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); scheduleURL();
 });
 $('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
-$('rndparams').onclick=()=>{
-  const p = { count: [1000,30000,1000], types: [2,10,1], radius: [10,80,1], damping: [0.5,0.99,0.01], force: [0.005,0.15,0.005], dt: [0.1,2,0.1] };
-  for(const [k,[min,max,step]] of Object.entries(p)){
-    const v = Math.round((Math.random()*(max-min)+min)/step)*step;
+$('nudge').onclick=()=>{
+  const steps = { count: 1000, radius: 2, damping: 0.02, force: 0.005, dt: 0.1 };
+  for(const [k,step] of Object.entries(steps)){
     const el = $(k);
-    if(el) { el.value = v; $(k+'Out').textContent = v; sim[k] = v; }
+    if(!el) continue;
+    const min=Number(el.min), max=Number(el.max), cur=Number(el.value);
+    const delta = Math.random()<0.5 ? -step : step;
+    const raw = cur + delta;
+    // snap to slider step
+    const s = Number(el.step);
+    const v = Math.max(min, Math.min(max, Math.round(raw/s)*s));
+    el.value = v;
+    if($(k+'Out')) $(k+'Out').textContent = v;
+    sim[k] = v;
+    if(k==='radius') sim.rebuildGridStorage();
   }
-  sim.rebuildGridStorage();
   scheduleURL();
 };
 $('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0; scheduleURL();});
