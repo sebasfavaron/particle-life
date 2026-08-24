@@ -6,7 +6,7 @@
 .info-icon:hover{color:#72e0b5}
 .info-icon{position:relative}
 .info-icon .tip{display:none;position:fixed;background:#080b11;color:#b9c7da;border:1px solid #35435b;border-radius:4px;padding:4px 7px;font-size:10px;white-space:nowrap;z-index:9999;pointer-events:none}
-.info-icon:hover .tip{display:block}
+
 .info-icon:hover::after{opacity:1}.controls input[type=range]{grid-column:1/3;width:100%;accent-color:#72e0b5}.controls input[type=text]{width:130px;color:#fff;background:#080b11;border:1px solid #35435b;padding:4px}.check{display:flex;gap:8px}.section-title{display:flex;justify-content:space-between;align-items:end;margin-bottom:7px}.section-title span,.legend,footer{font-size:11px;color:#718199}#matrix{display:grid;gap:3px;overflow:auto;padding-bottom:4px}.matrix-label{text-align:center;font-size:10px;align-self:center}.matrix-cell{width:29px;height:29px;border:1px solid #40506a;border-radius:3px;text-align:center;color:transparent;font-size:9px;padding:0;outline:none;caret-color:white}.matrix-cell:focus{border-color:white}
 .mass-input{width:29px;height:29px;border:1px solid #40506a;border-radius:3px;text-align:center;font-size:9px;padding:0;outline:none;color:transparent;caret-color:white}
 .mass-input:focus{border-color:#72e0b5}.legend{display:flex;justify-content:space-between;margin-top:5px}.legend i{font-style:normal}footer{padding-top:13px;border-top:1px solid #222d3e}@media(max-width:750px){body{grid-template-columns:1fr;grid-template-rows:55vh auto;overflow:auto}aside{border-left:0;border-top:1px solid #26334b}main{min-height:55vh}}
