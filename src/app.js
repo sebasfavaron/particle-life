@@ -95,8 +95,7 @@ $('share').onclick=()=>{
   const data = sim.exportPreset();
   data._name = prompt('Name this world:', data.seed) || data.seed;
   data._author = prompt('Your name:', '') || 'Anonymous';
-  const b64 = btoa(JSON.stringify(data));
-  const url = location.href.split('#')[0] + '#p=' + encodeURIComponent(b64);
+  const url = location.href.split('#')[0] + '#p=' + btoa(JSON.stringify(data)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
   // Show URL in prompt + try clipboard as bonus
   const fallback = ()=>prompt('Share this link:', url);
   if(navigator.clipboard && navigator.clipboard.writeText) {
@@ -221,7 +220,7 @@ addEventListener('visibilitychange', ()=>{
 function loadHashPreset(){
   if(!location.hash.startsWith('#p=')) return;
   try {
-    const raw = atob(decodeURIComponent(location.hash.slice(3)));
+    const raw = atob(location.hash.slice(3).replace(/-/g,'+').replace(/_/g,'/'));
     const data = JSON.parse(raw);
     sim.importPreset(data);
     syncControls();
