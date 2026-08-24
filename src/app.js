@@ -225,6 +225,7 @@ function loadSearchPreset(){
   if(!raw) return;
   try {
     const data = JSON.parse(raw);
+    console.log('Preset loaded:', data.classes, data.particleCount, data._name);
     sim.importPreset(data);
     if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
     syncControls();
