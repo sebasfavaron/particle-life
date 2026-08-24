@@ -135,10 +135,11 @@ $('scan').onclick=()=>{
   requestAnimationFrame(batch);
 };
 
-const canvasW = ()=>canvas.width/(ctx.getTransform().a || 1);
-const canvasH = ()=>canvas.height/(ctx.getTransform().d || 1);
 function draw() {
-  ctx.fillStyle='#05070c'; ctx.fillRect(0,0,canvasW(),canvasH());
+  // fill ALL physical pixels regardless of transform/dpr
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#05070c'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.restore();
   const size=1.65;
   for(let t=0;t<sim.types;t++) {
     ctx.fillStyle=palette[t%palette.length]; ctx.beginPath();
