@@ -3,7 +3,8 @@ import { ParticleLife } from './engine.js';
 const $ = id => document.getElementById(id);
 const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
-const sim = new ParticleLife();
+const box = canvas.getBoundingClientRect();
+const sim = new ParticleLife({ width: Math.round(box.width) || 1200, height: Math.round(box.height) || 800 });
 let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
