@@ -91,7 +91,7 @@ $('share').onclick=()=>{
   const data = sim.exportPreset();
   data._name = prompt('Name this world:', data.seed) || data.seed;
   data._author = prompt('Your name:', '') || 'Anonymous';
-  const b64 = btoa(JSON.stringify(data));
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
   const url = location.href.split('#')[0] + '#p=' + b64;
   // Show URL in prompt + try clipboard as bonus
   const fallback = ()=>prompt('Share this link:', url);
@@ -162,11 +162,14 @@ function loop(now) {
   last=now; requestAnimationFrame(loop);
 }
 syncControls(); window.particleLife=sim;
-if(location.hash.startsWith('#p=')){
+function loadHashPreset(){
+  if(!location.hash.startsWith('#p=')) return;
   try {
-    const data = JSON.parse(atob(location.hash.slice(3)));
+    const data = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
     sim.importPreset(data);
     syncControls();
   } catch(e){ console.warn('Invalid preset in URL', e); }
 }
+loadHashPreset();
+addEventListener('hashchange', loadHashPreset);
 requestAnimationFrame(loop);
