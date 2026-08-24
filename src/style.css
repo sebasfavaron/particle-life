@@ -9,6 +9,7 @@ html, body {
   font: calc(14px * var(--ui))/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 body { display: grid; grid-template-columns: minmax(0, 1fr) calc(360px * var(--ui)); }
+body.booting > main, body.booting > aside { visibility: hidden; }
 main { position: relative; min-width: 0; min-height: 0; height: 100%; }
 canvas { display: block; width: 100%; height: 100%; background: #05070c; }
 #hud {

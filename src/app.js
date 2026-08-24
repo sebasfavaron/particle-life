@@ -340,6 +340,7 @@ function loadSearchPreset(){
   } catch(e){ console.warn('Invalid preset URL', e); }
 }
 loadSearchPreset();
+document.body.classList.remove('booting');
 addEventListener('pageshow', loadSearchPreset);
 addEventListener('popstate', loadSearchPreset);
 requestAnimationFrame(loop);
