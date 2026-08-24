@@ -73,6 +73,13 @@ function colorFor(value) {
   const a = Math.min(1, Math.abs(value));
   return value < 0 ? `rgba(${80+Math.round(160*a)},50,90,${0.25+0.65*a})` : `rgba(35,${90+Math.round(150*a)},${100+Math.round(100*a)},${0.25+0.65*a})`;
 }
+function paintRange(input) {
+  const min = Number(input.min), max = Number(input.max), value = Number(input.value);
+  const progress = max > min && Number.isFinite(value) ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
+  input.style.setProperty('--range-fill', `${progress * 100}%`);
+}
+function paintRanges() { document.querySelectorAll('.controls input[type=range]').forEach(paintRange); }
+document.addEventListener('input', event => { if(event.target.matches('.controls input[type=range]')) paintRange(event.target); });
 function buildMatrix() {
   const box = $('matrix'), n = sim.types; box.innerHTML = '';
   const uiScale = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui')) || 1;
@@ -116,6 +123,7 @@ function syncControls() {
   $('seed').value=sim.seed; $('count').value=sim.count; $('types').value=sim.types; $('radius').value=sim.radius;
   $('damping').value=sim.damping; $('force').value=sim.force; $('dt').value=sim.dt; $('wrap').checked=sim.wrap;
   for (const id of ['count','types','radius','damping','force','dt']) $(id+'Out').textContent=$(id).value;
+  paintRanges();
   buildMatrix();
 }
 function randomize() {
@@ -158,6 +166,7 @@ $('nudge').onclick=()=>{
     const s = Number(el.step);
     const v = Math.max(min, Math.min(max, Math.round(raw/s)*s));
     el.value = v;
+    paintRange(el);
     if($(k+'Out')) $(k+'Out').textContent = v;
     sim[k] = v;
     if(k==='radius') sim.rebuildGridStorage();
