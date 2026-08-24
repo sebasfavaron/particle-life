@@ -7,6 +7,7 @@ const sim = new ParticleLife();
 let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
+let firstFrame = true;
 
 function resize() {
   const box = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
@@ -134,8 +135,10 @@ $('scan').onclick=()=>{
   requestAnimationFrame(batch);
 };
 
+const canvasW = ()=>canvas.width/(ctx.getTransform().a || 1);
+const canvasH = ()=>canvas.height/(ctx.getTransform().d || 1);
 function draw() {
-  ctx.fillStyle='#05070c'; ctx.fillRect(0,0,sim.width,sim.height);
+  ctx.fillStyle='#05070c'; ctx.fillRect(0,0,canvasW(),canvasH());
   const size=1.65;
   for(let t=0;t<sim.types;t++) {
     ctx.fillStyle=palette[t%palette.length]; ctx.beginPath();
@@ -158,6 +161,7 @@ function draw() {
   }
 }
 function loop(now) {
+  if(firstFrame){ firstFrame=false; resize(); }
   const start=performance.now();
   if(running && !scanning) {
     // auto-cap steps to stay within frame budget
@@ -189,7 +193,6 @@ function loop(now) {
   }
   requestAnimationFrame(loop);
 }
-resize(); // force correct canvas size before first frame
 syncControls(); window.particleLife=sim;
 // auto-reset speed to 1 when tab becomes visible again
 addEventListener('visibilitychange', ()=>{
