@@ -96,7 +96,9 @@ $('share').onclick=()=>{
   d._name = prompt('Name this world:', d.seed) || d.seed;
   d._author = prompt('Your name:', '') || 'Anonymous';
   d.speed = stepsPerFrame;
+  console.log('SHARE: classes='+d.classes+' count='+d.particleCount+' seed='+d.seed+' matrix='+(d.matrix?d.matrix.length+'x'+d.matrix[0].length:'BAD'));
   const json = JSON.stringify(d);
+  console.log('SHARE URL length: '+json.length+' chars, first 80: '+json.substring(0,80));
   const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
   const fallback = ()=>prompt('Share this link:', url);
   if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
@@ -222,10 +224,11 @@ addEventListener('visibilitychange', ()=>{
 function loadSearchPreset(){
   const q = new URLSearchParams(location.search);
   const raw = q.get('preset');
+  console.log('LOAD: search='+location.search+' hasPreset='+!!raw);
   if(!raw) return;
   try {
     const data = JSON.parse(raw);
-    console.log('Preset loaded:', data.classes, data.particleCount, data._name);
+    console.log('Preset loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+(data.matrix?data.matrix.length+'x'+data.matrix[0].length:'BAD'));
     sim.importPreset(data);
     if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
     syncControls();
