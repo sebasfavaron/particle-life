@@ -115,8 +115,8 @@ function updateURL() {
 let urlDirty = false;
 function scheduleURL() { if(!urlDirty){ urlDirty=true; requestAnimationFrame(()=>{ urlDirty=false; updateURL(); }); } }
 
-$('zoomOut').onclick=()=>setWorldScale(worldScale/1.3);
-$('zoomIn').onclick=()=>setWorldScale(worldScale*1.3);
+$('zoomIn').onclick=()=>setWorldScale(worldScale/1.3);
+$('zoomOut').onclick=()=>setWorldScale(worldScale*1.3);
 $('share').onclick=()=>{
   updateURL(); // ensure URL bar is fresh
   const fallback = ()=>prompt('Copy this URL:', location.href);
