@@ -58,14 +58,14 @@ function resize() {
   ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
   sim.resize(baseW * worldScale, baseH * worldScale);
 }
-function setWorldScale(s) {
+function setWorldScale(s, { persist = true } = {}) {
   worldScale = Math.max(0.25, Math.min(5, s));
   const dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
   const renderScale = dpr / worldScale;
   ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
   sim.resize(baseW * worldScale, baseH * worldScale);
-  scheduleURL();
+  if(persist) scheduleURL();
 }
 new ResizeObserver(resize).observe(canvas);
 
@@ -180,6 +180,8 @@ function updateURL() {
   d._name = document.title.replace(' - Particle Life Lab','') || d.seed;
   d._author = 'ballbox-first';
   d.speed = stepsPerFrame;
+  d.zoom = worldScale;
+  d.showForces = showForces;
   const json = JSON.stringify(d);
   const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
   history.replaceState(null, '', url);
@@ -217,7 +219,8 @@ $('share').onclick=()=>{
 };
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
-$('forces').onclick=()=>{ showForces=!showForces; $('forces').className=showForces?'active':'secondary'; };
+function syncForcesButton() { $('forces').className = showForces ? 'active' : 'secondary'; }
+$('forces').onclick=()=>{ showForces=!showForces; syncForcesButton(); scheduleURL(); };
 $('scan').onclick=()=>{
   const n = prompt('Steps to simulate (no render):', '10000');
   const total = parseInt(n);
@@ -308,7 +311,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 resize(); // sync pre-resize — ensures fill covers canvas
-syncControls(); window.particleLife=sim;
+window.particleLife=sim;
 // auto-reset speed to 1 when tab becomes visible again
 addEventListener('visibilitychange', ()=>{
   if(document.hidden && stepsPerFrame>1) {
@@ -330,14 +333,16 @@ function loadSearchPreset(){
   const q = new URLSearchParams(location.search);
   const raw = q.get('preset');
   console.log('LOAD: search='+location.search+' hasPreset='+!!raw);
-  if(!raw) return;
-  try {
+  if(raw) try {
     const data = JSON.parse(raw);
     console.log('Preset loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+(data.matrix?data.matrix.length+'x'+data.matrix[0].length:'BAD'));
     sim.importPreset(data);
     if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
-    syncControls();
+    if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
+    if(typeof data.showForces === 'boolean') showForces = data.showForces;
   } catch(e){ console.warn('Invalid preset URL', e); }
+  syncControls();
+  syncForcesButton();
 }
 loadSearchPreset();
 document.body.classList.remove('booting');
