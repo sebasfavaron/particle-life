@@ -75,7 +75,8 @@ function colorFor(value) {
 }
 function buildMatrix() {
   const box = $('matrix'), n = sim.types; box.innerHTML = '';
-  box.style.gridTemplateColumns = `18px repeat(${n},29px)`;
+  const uiScale = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui')) || 1;
+  box.style.gridTemplateColumns = `${18 * uiScale}px repeat(${n},${29 * uiScale}px)`;
   box.append(document.createElement('span'));
   for (let c=0;c<n;c++) { const el=document.createElement('span'); el.className='matrix-label'; el.style.color=palette[c]; el.textContent=c+1; box.append(el); }
   for (let r=0;r<n;r++) {

@@ -40,6 +40,7 @@ button:hover { border-color: #6d84a8; }
 #appTooltip { position: fixed; background: #080b11; color: #b9c7da; border: 1px solid #35435b; border-radius: calc(4px * var(--ui)); padding: calc(4px * var(--ui)) calc(7px * var(--ui)); font-size: calc(10px * var(--ui)); white-space: nowrap; z-index: 9999; pointer-events: none; }
 #appTooltip[hidden] { display: none; }
 .controls input[type=range] { grid-column: 1/3; width: 100%; height: calc(16px * var(--ui)); margin: calc(2px * var(--ui)); accent-color: #72e0b5; }
+.controls input[type=range]::-webkit-slider-thumb { transform: scale(.5); }
 .controls input[type=checkbox] { width: calc(13px * var(--ui)); height: calc(13px * var(--ui)); margin: calc(3px * var(--ui)); }
 .controls input[type=text] { width: calc(130px * var(--ui)); color: #fff; background: #080b11; border: 1px solid #35435b; padding: calc(4px * var(--ui)); }
 .check { display: flex; gap: calc(8px * var(--ui)); }
