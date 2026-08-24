@@ -95,14 +95,14 @@ $('share').onclick=()=>{
   const data = sim.exportPreset();
   data._name = prompt('Name this world:', data.seed) || data.seed;
   data._author = prompt('Your name:', '') || 'Anonymous';
-  const url = location.href.split('#')[0] + '#p=' + btoa(JSON.stringify(data)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-  // Show URL in prompt + try clipboard as bonus
+  const url = location.origin + location.pathname + '?p=' + encodeURIComponent(JSON.stringify(data));
   const fallback = ()=>prompt('Share this link:', url);
-  if(navigator.clipboard && navigator.clipboard.writeText) {
+  if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(url).then(()=>{
-      const btn = $('share'); const t = btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t, 1500);
+      const btn = $('share'); const t = btn.textContent;
+      btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1500);
     }).catch(fallback);
-  } else { fallback(); }
+  } else fallback();
 };
 $('load').onclick=()=>$('file').click();
 $('file').onchange=async event=>{ try { sim.importPreset(JSON.parse(await event.target.files[0].text())); syncControls(); } catch(error){ alert(error.message); } event.target.value=''; };
@@ -217,15 +217,21 @@ addEventListener('visibilitychange', ()=>{
     window._savedSpeed = null;
   }
 });
-function loadHashPreset(){
-  if(!location.hash.startsWith('#p=')) return;
+function loadSearchPreset(){
+  const p = new URLSearchParams(location.search).get('p');
+  if(!p) return;
   try {
-    const raw = atob(location.hash.slice(3).replace(/-/g,'+').replace(/_/g,'/'));
-    const data = JSON.parse(raw);
+    const data = JSON.parse(p);
     sim.importPreset(data);
     syncControls();
   } catch(e){ console.warn('Invalid preset in URL', e); }
 }
-loadHashPreset();
-addEventListener('hashchange', loadHashPreset);
+loadSearchPreset(); // on load
+addEventListener('pageshow', loadSearchPreset); // back-forward cache
+addEventListener('popstate', ()=>{
+  loadSearchPreset();
+  if(!new URLSearchParams(location.search).get('p')){
+    sim.resetParticles($('seed').value);
+  }
+});
 requestAnimationFrame(loop);
