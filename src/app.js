@@ -95,15 +95,9 @@ $('share').onclick=()=>{
   const d = sim.exportPreset();
   d._name = prompt('Name this world:', d.seed) || d.seed;
   d._author = prompt('Your name:', '') || 'Anonymous';
-  const p = new URLSearchParams();
-  p.set('_name', d._name); p.set('_author', d._author);
-  p.set('seed', d.seed); p.set('classes', d.classes);
-  p.set('particleCount', d.particleCount); p.set('interactionRadius', d.interactionRadius);
-  p.set('damping', d.damping); p.set('force', d.force); p.set('dt', d.dt);
-  p.set('wrap', d.wrap); p.set('masses', JSON.stringify(d.masses));
-  p.set('matrix', JSON.stringify(d.matrix));
-  p.set('speed', stepsPerFrame);
-  const url = location.origin + location.pathname + '?' + p.toString();
+  d.speed = stepsPerFrame;
+  const json = JSON.stringify(d);
+  const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
   const fallback = ()=>prompt('Share this link:', url);
   if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(url).then(()=>{
@@ -227,26 +221,13 @@ addEventListener('visibilitychange', ()=>{
 });
 function loadSearchPreset(){
   const q = new URLSearchParams(location.search);
-  if(!q.get('classes')) return;
+  const raw = q.get('preset');
+  if(!raw) return;
   try {
-    sim.importPreset({
-      _name: q.get('_name') || '',
-      _author: q.get('_author') || '',
-      seed: q.get('seed') || 'clusters',
-      classes: Number(q.get('classes')),
-      particleCount: Number(q.get('particleCount')),
-      interactionRadius: Number(q.get('interactionRadius')),
-      damping: Number(q.get('damping')),
-      force: Number(q.get('force')),
-      dt: Number(q.get('dt')),
-      wrap: q.get('wrap')==='true',
-      masses: JSON.parse(q.get('masses') || '[]'),
-      matrix: JSON.parse(q.get('matrix') || '[]')
-    });
+    const data = JSON.parse(raw);
+    sim.importPreset(data);
+    if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
     syncControls();
-    // restore speed
-    const s = q.get('speed');
-    if(s){ stepsPerFrame=Number(s); $('speed').value=s; $('speedOut').textContent=s; }
   } catch(e){ console.warn('Invalid preset URL', e); }
 }
 loadSearchPreset();
