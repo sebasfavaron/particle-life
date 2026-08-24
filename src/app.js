@@ -5,16 +5,27 @@ const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const box = canvas.getBoundingClientRect();
 const sim = new ParticleLife({ width: Math.round(box.width) || 1200, height: Math.round(box.height) || 800 });
-let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false;
+let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false, worldScale = 1, baseW = 1200, baseH = 800;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
 
 function resize() {
   const box = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
-  canvas.width = Math.round(box.width * dpr); canvas.height = Math.round(box.height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  sim.resize(box.width, box.height);
+  baseW = box.width; baseH = box.height;
+  canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
+  const renderScale = dpr / worldScale;
+  ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  sim.resize(baseW * worldScale, baseH * worldScale);
+}
+function setWorldScale(s) {
+  worldScale = Math.max(0.25, Math.min(5, s));
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
+  const renderScale = dpr / worldScale;
+  ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  sim.resize(baseW * worldScale, baseH * worldScale);
+  scheduleURL();
 }
 new ResizeObserver(resize).observe(canvas);
 
@@ -104,6 +115,8 @@ function updateURL() {
 let urlDirty = false;
 function scheduleURL() { if(!urlDirty){ urlDirty=true; requestAnimationFrame(()=>{ urlDirty=false; updateURL(); }); } }
 
+$('zoomOut').onclick=()=>setWorldScale(worldScale/1.3);
+$('zoomIn').onclick=()=>setWorldScale(worldScale*1.3);
 $('share').onclick=()=>{
   updateURL(); // ensure URL bar is fresh
   const fallback = ()=>prompt('Copy this URL:', location.href);
@@ -148,7 +161,7 @@ function draw() {
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle='#05070c'; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.restore();
-  const size=1.65;
+  const size=1.65*worldScale;
   for(let t=0;t<sim.types;t++) {
     ctx.fillStyle=palette[t%palette.length]; ctx.beginPath();
     for(let p=sim.typeOffsets[t];p<sim.typeOffsets[t+1];p++){const i=sim.drawOrder[p];ctx.rect(sim.x[i],sim.y[i],size,size);}
