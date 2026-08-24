@@ -148,17 +148,21 @@ function draw() {
     ctx.fill();
   }
   if(showForces) {
-    const scale=8;
+    const scale=8, maxArrows=2000;
+    let drawn=0;
     for(let t=0;t<sim.types;t++) {
       ctx.strokeStyle=palette[t%palette.length]+'bb'; ctx.lineWidth=1.8; ctx.beginPath();
       for(let p=sim.typeOffsets[t];p<sim.typeOffsets[t+1];p++){
+        if(drawn>=maxArrows) break;
         const i=sim.drawOrder[p], fx=sim.fx[i], fy=sim.fy[i], m=Math.sqrt(fx*fx+fy*fy);
-        if(m<0.0005) continue;
+        if(m<0.001) continue;
         const len = Math.min(m*scale, 20);
         ctx.moveTo(sim.x[i],sim.y[i]);
         ctx.lineTo(sim.x[i]+fx/m*len, sim.y[i]+fy/m*len);
+        drawn++;
       }
       ctx.stroke();
+      if(drawn>=maxArrows) break;
     }
   }
 }
