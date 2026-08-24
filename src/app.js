@@ -221,7 +221,7 @@ addEventListener('visibilitychange', ()=>{
 function loadHashPreset(){
   if(!location.hash.startsWith('#p=')) return;
   try {
-    const raw = atob(location.hash.slice(3));
+    const raw = atob(decodeURIComponent(location.hash.slice(3)));
     const data = JSON.parse(raw);
     sim.importPreset(data);
     syncControls();
