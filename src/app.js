@@ -6,7 +6,7 @@ const appTooltip = document.createElement('div');
 appTooltip.id = 'appTooltip';
 appTooltip.role = 'tooltip';
 appTooltip.hidden = true;
-document.documentElement.append(appTooltip);
+document.body.append(appTooltip);
 let tooltipIcon = null;
 
 function placeTooltip(icon) {
@@ -20,7 +20,7 @@ function placeTooltip(icon) {
   const iconBox = icon.getBoundingClientRect();
   const tipBox = appTooltip.getBoundingClientRect();
   const margin = 6;
-  const left = Math.max(margin, Math.min(innerWidth - tipBox.width - margin, iconBox.left + iconBox.width / 2 - tipBox.width / 2));
+  const left = Math.max(margin, Math.min(innerWidth - tipBox.width - margin, iconBox.left));
   const above = iconBox.top - tipBox.height - margin;
   const top = above >= margin ? above : Math.min(innerHeight - tipBox.height - margin, iconBox.bottom + margin);
   appTooltip.style.left = `${left}px`;
