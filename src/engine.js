@@ -14,6 +14,8 @@ export class ParticleLife {
     this.seed = String(options.seed ?? 'clusters');
     this.beta = 0.3;
     this.matrix = new Float32Array(this.types * this.types);
+    this.masses = new Float32Array(this.types);
+    for (let t = 0; t < this.types; t++) this.masses[t] = 1;
     this.randomizeMatrix(this.seed);
     this.resetParticles(this.seed);
   }
@@ -42,6 +44,9 @@ export class ParticleLife {
       this.types = Math.max(1, Math.min(12, Math.round(this.types)));
       this.matrix = new Float32Array(this.types * this.types);
       this.randomizeMatrix(this.seed);
+      const newMasses = new Float32Array(this.types);
+      for (let t = 0; t < this.types; t++) newMasses[t] = t < this.masses.length ? this.masses[t] : 1;
+      this.masses = newMasses;
     }
     if (rebuildParticles || rebuildMatrix) this.resetParticles(this.seed);
     else this.rebuildGridStorage();
@@ -53,7 +58,7 @@ export class ParticleLife {
     for (let row = 0; row < this.types; row++) {
       for (let col = 0; col < this.types; col++) {
         // Slightly positive diagonal creates stable same-color clusters.
-        const value = row === col ? 0.25 + random() * 0.65 : random() * 2 - 1;
+        const value = random() * 2 - 1;
         this.matrix[row * this.types + col] = value;
       }
     }
@@ -64,6 +69,7 @@ export class ParticleLife {
     const n = this.count;
     this.x = new Float32Array(n); this.y = new Float32Array(n);
     this.vx = new Float32Array(n); this.vy = new Float32Array(n);
+    this.fx = new Float32Array(n); this.fy = new Float32Array(n);
     this.kind = new Uint8Array(n); this.next = new Int32Array(n);
     const random = ParticleLife.rng(this.seed + ':particles:' + n + ':' + this.types);
     for (let i = 0; i < n; i++) {
@@ -109,7 +115,7 @@ export class ParticleLife {
 
   step() {
     this.buildGrid();
-    const { count, radius, width, height, cols, rows, types, matrix, wrap } = this;
+    const { count, radius, width, height, cols, rows, types, matrix, masses, wrap } = this;
     const r2 = radius * radius, invR = 1 / radius, beta = this.beta;
     const scale = this.force * this.dt;
     const damp = Math.pow(this.damping, this.dt);
@@ -141,8 +147,9 @@ export class ParticleLife {
           }
         }
       }
-      vx[i] = (vx[i] + fx * scale) * damp;
-      vy[i] = (vy[i] + fy * scale) * damp;
+      vx[i] = (vx[i] + fx * scale / masses[source]) * damp;
+      vy[i] = (vy[i] + fy * scale / masses[source]) * damp;
+      this.fx[i] = fx; this.fy[i] = fy;
     }
     const move = this.dt;
     for (let i = 0; i < count; i++) {
@@ -160,7 +167,8 @@ export class ParticleLife {
   exportPreset() {
     return { version: 1, seed: this.seed, particleCount: this.count, classes: this.types,
       interactionRadius: this.radius, damping: this.damping, force: this.force, dt: this.dt,
-      wrap: this.wrap, matrix: Array.from({ length: this.types }, (_, r) =>
+      wrap: this.wrap, masses: Array.from(this.masses),
+      matrix: Array.from({ length: this.types }, (_, r) =>
         Array.from(this.matrix.slice(r * this.types, (r + 1) * this.types))) };
   }
 
@@ -172,6 +180,7 @@ export class ParticleLife {
     this.radius = Number(data.interactionRadius ?? this.radius); this.damping = Number(data.damping ?? this.damping);
     this.force = Number(data.force ?? this.force); this.dt = Number(data.dt ?? this.dt); this.wrap = Boolean(data.wrap ?? this.wrap);
     this.seed = String(data.seed ?? this.seed); this.matrix = Float32Array.from(data.matrix.flat().map(v => Math.max(-1, Math.min(1, Number(v)))));
+    if (data.masses) { this.masses = Float32Array.from(data.masses); }
     this.resetParticles(this.seed);
   }
 }

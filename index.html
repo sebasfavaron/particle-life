@@ -6,7 +6,7 @@
 <main><canvas id="world"></canvas><div id="hud"><b id="fps">— FPS</b><span id="frame">— ms</span><span id="pairs">uniform grid</span></div></main>
 <aside>
   <header><h1>Particle Life</h1><p>Color rules become moving ecosystems.</p></header>
-  <section class="actions"><button id="pause">Pause</button><button id="reset">Reset particles</button><button id="randomize" class="primary">Randomize matrix</button></section>
+  <section class="actions"><button id="pause">Pause</button><button id="reset">Reset particles</button><button id="randomize" class="primary">Randomize matrix</button><button id="rndmass">Randomize masses</button><button id="scan">Scan ahead</button></section>
   <section class="controls">
     <label>Seed <input id="seed" type="text" value="clusters"></label>
     <label>Particles <output id="countOut"></output><input id="count" type="range" min="1000" max="30000" step="1000" value="10000"></label>
@@ -15,10 +15,11 @@
     <label>Damping <output id="dampingOut"></output><input id="damping" type="range" min="0.5" max="0.99" step="0.01" value="0.82"></label>
     <label>Force <output id="forceOut"></output><input id="force" type="range" min="0.005" max="0.15" step="0.005" value="0.045"></label>
     <label>dt <output id="dtOut"></output><input id="dt" type="range" min="0.1" max="2" step="0.1" value="1"></label>
+    <label>Speed <output id="speedOut">1</output><input id="speed" type="range" min="1" max="100" step="1" value="1"></label>
     <label class="check"><input id="wrap" type="checkbox" checked> Wrap edges</label>
   </section>
   <section><div class="section-title"><h2>Interaction matrix</h2><span>row feels column</span></div><div id="matrix"></div><div class="legend"><i>− repel</i><i>0 neutral</i><i>+ attract</i></div></section>
-  <section class="actions"><button id="save">Download JSON</button><button id="load">Load JSON</button><input id="file" type="file" accept="application/json" hidden></section>
+  <section class="actions"><button id="save">Download JSON</button><button id="share" class="primary">Share link</button><button id="load">Load JSON</button><input id="file" type="file" accept="application/json" hidden><button id="forces" class="secondary">Show forces</button></section>
   <footer>Space: pause · R: randomize · grid cell size = interaction radius</footer>
 </aside>
 <script type="module" src="src/app.js"></script>
