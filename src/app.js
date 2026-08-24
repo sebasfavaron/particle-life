@@ -92,10 +92,17 @@ $('wrap').onchange=()=>sim.wrap=$('wrap').checked;
 $('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0;});
 $('save').onclick=()=>{ const blob=new Blob([JSON.stringify(sim.exportPreset(),null,2)],{type:'application/json'}); const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`particle-life-${sim.seed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
 $('share').onclick=()=>{
-  const data = sim.exportPreset();
-  data._name = prompt('Name this world:', data.seed) || data.seed;
-  data._author = prompt('Your name:', '') || 'Anonymous';
-  const url = location.origin + location.pathname + '?p=' + encodeURIComponent(JSON.stringify(data));
+  const d = sim.exportPreset();
+  d._name = prompt('Name this world:', d.seed) || d.seed;
+  d._author = prompt('Your name:', '') || 'Anonymous';
+  const p = new URLSearchParams();
+  p.set('_name', d._name); p.set('_author', d._author);
+  p.set('seed', d.seed); p.set('classes', d.classes);
+  p.set('particleCount', d.particleCount); p.set('interactionRadius', d.interactionRadius);
+  p.set('damping', d.damping); p.set('force', d.force); p.set('dt', d.dt);
+  p.set('wrap', d.wrap); p.set('masses', JSON.stringify(d.masses));
+  p.set('matrix', JSON.stringify(d.matrix));
+  const url = location.origin + location.pathname + '?' + p.toString();
   const fallback = ()=>prompt('Share this link:', url);
   if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(url).then(()=>{
@@ -218,20 +225,27 @@ addEventListener('visibilitychange', ()=>{
   }
 });
 function loadSearchPreset(){
-  const p = new URLSearchParams(location.search).get('p');
-  if(!p) return;
+  const q = new URLSearchParams(location.search);
+  if(!q.get('classes')) return;
   try {
-    const data = JSON.parse(p);
-    sim.importPreset(data);
+    sim.importPreset({
+      _name: q.get('_name') || '',
+      _author: q.get('_author') || '',
+      seed: q.get('seed') || 'clusters',
+      classes: Number(q.get('classes')),
+      particleCount: Number(q.get('particleCount')),
+      interactionRadius: Number(q.get('interactionRadius')),
+      damping: Number(q.get('damping')),
+      force: Number(q.get('force')),
+      dt: Number(q.get('dt')),
+      wrap: q.get('wrap')==='true',
+      masses: JSON.parse(q.get('masses') || '[]'),
+      matrix: JSON.parse(q.get('matrix') || '[]')
+    });
     syncControls();
-  } catch(e){ console.warn('Invalid preset in URL', e); }
+  } catch(e){ console.warn('Invalid preset URL', e); }
 }
-loadSearchPreset(); // on load
-addEventListener('pageshow', loadSearchPreset); // back-forward cache
-addEventListener('popstate', ()=>{
-  loadSearchPreset();
-  if(!new URLSearchParams(location.search).get('p')){
-    sim.resetParticles($('seed').value);
-  }
-});
+loadSearchPreset();
+addEventListener('pageshow', loadSearchPreset);
+addEventListener('popstate', loadSearchPreset);
 requestAnimationFrame(loop);
