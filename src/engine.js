@@ -8,7 +8,7 @@ export class ParticleLife {
     this.types = options.types ?? 6;
     this.radius = options.radius ?? 28;
     this.force = options.force ?? 0.045;
-    this.damping = options.damping ?? 0.82;
+    this.damping = options.damping ?? 0.80;
     this.dt = options.dt ?? 1;
     this.wrap = options.wrap ?? true;
     this.seed = String(options.seed ?? 'clusters');
