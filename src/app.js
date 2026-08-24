@@ -142,10 +142,28 @@ $('zoomIn').onclick=()=>setWorldScale(worldScale/1.3);
 $('zoomOut').onclick=()=>setWorldScale(worldScale*1.3);
 $('share').onclick=()=>{
   updateURL();
-  navigator.clipboard.writeText(location.href).then(()=>{
-    const btn = $('share'); btn.textContent='Copied!';
-    setTimeout(()=>btn.textContent='Copy URL',1500);
-  }).catch(()=>{}); // silent fail if clipboard blocked
+  const url = location.href;
+  function copied(){
+    const btn = $('share'); btn.textContent='✓ Copied!'; btn.className='primary copied';
+    setTimeout(()=>{ btn.innerHTML='Copy URL'; btn.className='primary'; },1500);
+  }
+  // Try clipboard API first, fallback to execCommand
+  if(navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(copied).catch(()=>{
+      // fallback: textarea trick
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); copied(); } catch(e) {}
+      document.body.removeChild(ta);
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); copied(); } catch(e) {}
+    document.body.removeChild(ta);
+  }
 };
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
