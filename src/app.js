@@ -189,6 +189,7 @@ function loop(now) {
   }
   requestAnimationFrame(loop);
 }
+resize(); // force correct canvas size before first frame
 syncControls(); window.particleLife=sim;
 // auto-reset speed to 1 when tab becomes visible again
 addEventListener('visibilitychange', ()=>{
