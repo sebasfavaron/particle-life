@@ -16,7 +16,7 @@
     <label><span>Force <span class="info-icon" data-tip="Strength of attraction/repulsion. Higher = faster, chaotic">ⓘ</span></span> <output id="forceOut"></output><input id="force" type="range" min="0.005" max="0.15" step="0.005" value="0.045"></label>
     <label><span>dt <span class="info-icon" data-tip="Simulation speed multiplier. Higher = faster but less accurate">ⓘ</span></span> <output id="dtOut"></output><input id="dt" type="range" min="0.1" max="2" step="0.1" value="1"></label>
     <label><span>Speed <span class="info-icon" data-tip="Physics steps per rendered frame. 1 = normal, 100 = fast-forward">ⓘ</span></span> <output id="speedOut">1</output><input id="speed" type="range" min="1" max="100" step="1" value="1"></label>
-    <label class="check"><input id="wrap" type="checkbox" checked> <span>Wrap edges <span class="info-icon" data-tip="Particles wrap around edges vs. bounce off">ⓘ</span></span></label>
+    <label class="check"><input id="wrap" type="checkbox" checked>Wrap edges <span class="info-icon" data-tip="Particles wrap around edges vs. bounce off">ⓘ</span></label>
   <div class="actions"><button id="nudge">Nudge parameters</button></div></section>
   <section><div class="section-title"><h2>Interaction matrix</h2><span>row feels column</span></div><div id="matrix"></div><div class="legend"><i>− repel</i><i>0 neutral</i><i>+ attract</i></div><div class="actions" style="margin-top:10px"><button id="randomize" class="primary">Randomize matrix</button><button id="rndmass">Randomize masses</button><button id="rndall">Randomize all</button></div></section>
   <section class="actions"><button id="zoomOut">−</button><span id="zoomLabel" style="color:#b9c7da">Zoom</span><button id="zoomIn">+</button>
