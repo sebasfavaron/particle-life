@@ -5,6 +5,8 @@ const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const sim = new ParticleLife();
 let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false;
+const MAX_FRAME_MS = 20; // safety budget per frame
+let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 
 function resize() {
   const box = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
@@ -85,7 +87,7 @@ for (const id of ['radius','damping','force','dt']) $(id).addEventListener('inpu
   const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage();
 });
 $('wrap').onchange=()=>sim.wrap=$('wrap').checked;
-$('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;});
+$('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0;});
 $('save').onclick=()=>{ const blob=new Blob([JSON.stringify(sim.exportPreset(),null,2)],{type:'application/json'}); const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`particle-life-${sim.seed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
 $('share').onclick=()=>{
   const data = sim.exportPreset();
@@ -156,12 +158,55 @@ function draw() {
   }
 }
 function loop(now) {
-  const start=performance.now(); if(running && !scanning) { for(let s=0;s<stepsPerFrame;s++) sim.step(); } draw();
+  const start=performance.now();
+  if(running && !scanning) {
+    // auto-cap steps to stay within frame budget
+    const budget = Math.max(1, stepsPerFrame);
+    let capped;
+    if(stepTimeEstimate > 0) {
+      // leave half the frame for draw
+      const room = MAX_FRAME_MS - (performance.now() - start);
+      capped = Math.min(budget, Math.max(1, Math.floor(room / stepTimeEstimate)));
+    } else {
+      capped = Math.min(budget, 5); // safe first guess
+    }
+    for(let s=0;s<capped;s++) sim.step();
+  }
+  draw();
   const elapsed=performance.now()-start; frames++; frameSum+=elapsed;
-  if(now-sampleAt>=500){const fps=frames*1000/(now-sampleAt);$('fps').textContent=`${fps.toFixed(0)} FPS`;$('frame').textContent=`${(frameSum/frames).toFixed(1)} ms`;$('pairs').textContent=`${sim.count.toLocaleString()} · ${sim.cols}×${sim.rows} grid`;window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows]};frames=0;frameSum=0;sampleAt=now;}
-  last=now; requestAnimationFrame(loop);
+  if(now-sampleAt>=500){
+    const msPerStep = stepTimeEstimate > 0 ? stepTimeEstimate : frameSum/frames/stepsPerFrame;
+    const fps=frames*1000/(now-sampleAt);
+    $('fps').textContent=`${fps.toFixed(0)} FPS`;
+    $('frame').textContent=`${(frameSum/frames).toFixed(1)} ms`;
+    $('pairs').textContent=`${sim.count.toLocaleString()} ${stepsPerFrame>1?'· steps='+stepsPerFrame:''}`;
+    window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows]};
+    frames=0;frameSum=0;sampleAt=now;
+  }
+  // calibrate step time on first few frames
+  if(stepTimeEstimate===0 && running && stepsPerFrame>1) {
+    stepTimeEstimate = (performance.now()-start)/Math.max(1,stepsPerFrame);
+  }
+  requestAnimationFrame(loop);
 }
 syncControls(); window.particleLife=sim;
+// auto-reset speed to 1 when tab becomes visible again
+addEventListener('visibilitychange', ()=>{
+  if(document.hidden && stepsPerFrame>1) {
+    // when leaving, store speed and set to 1
+    window._savedSpeed = stepsPerFrame;
+    stepsPerFrame = 1;
+    $('speed').value = 1;
+    $('speedOut').textContent = '1';
+  } else if(!document.hidden && window._savedSpeed) {
+    // when returning, restore — but also reset step time estimate so it calibrates fresh
+    stepsPerFrame = window._savedSpeed;
+    $('speed').value = window._savedSpeed;
+    $('speedOut').textContent = String(window._savedSpeed);
+    stepTimeEstimate = 0;
+    window._savedSpeed = null;
+  }
+});
 function loadHashPreset(){
   if(!location.hash.startsWith('#p=')) return;
   try {
