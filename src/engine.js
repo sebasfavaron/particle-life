@@ -4,7 +4,7 @@ export class ParticleLife {
   constructor(options = {}) {
     this.width = options.width ?? 1200;
     this.height = options.height ?? 800;
-    this.count = options.count ?? 10000;
+    this.count = options.count ?? 4000;
     this.types = options.types ?? 6;
     this.radius = options.radius ?? 28;
     this.force = options.force ?? 0.045;
