@@ -89,6 +89,11 @@ $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
   buildMatrix(); scheduleURL();
 };
+$('rndall').onclick=()=>{
+  randomize();
+  for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
+  buildMatrix(); scheduleURL();
+};
 $('reset').onclick=()=>{ sim.resetParticles($('seed').value); scheduleURL(); };
 $('pause').onclick=()=>{running=!running;$('pause').textContent=running?'Pause':'Resume';};
 $('seed').addEventListener('change',()=>{sim.seed=$('seed').value; scheduleURL();});
