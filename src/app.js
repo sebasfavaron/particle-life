@@ -1,6 +1,16 @@
 import { ParticleLife } from './engine.js';
 
 const $ = id => document.getElementById(id);
+// Tooltip positioning — shows above icon, never clipped by aside overflow
+document.addEventListener('mouseover', e => {
+  const icon = e.target.closest('.info-icon');
+  if(!icon) return;
+  const tip = icon.querySelector('.tip');
+  if(!tip) return;
+  const r = icon.getBoundingClientRect();
+  tip.style.left = (r.left + r.width/2 - tip.offsetWidth/2) + 'px';
+  tip.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+});
 const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const box = canvas.getBoundingClientRect();
