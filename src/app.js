@@ -32,7 +32,7 @@ function buildMatrix() {
     for (let c=0;c<n;c++) {
       const input=document.createElement('input'); input.type='number'; input.min='-1'; input.max='1'; input.step='0.05'; input.className='matrix-cell';
       const index=r*n+c, refresh=()=>{ const v=sim.matrix[index]; input.value=v.toFixed(2); input.style.background=colorFor(v); input.title=v.toFixed(2); };
-      input.addEventListener('input',()=>{ const v=Number(input.value); if(Number.isFinite(v)){sim.matrix[index]=Math.max(-1,Math.min(1,v));input.style.background=colorFor(sim.matrix[index]);input.title=v.toFixed(2);} });
+      input.addEventListener('input',()=>{ const v=Number(input.value); if(Number.isFinite(v)){sim.matrix[index]=Math.max(-1,Math.min(1,v));input.style.background=colorFor(sim.matrix[index]);input.title=v.toFixed(2); scheduleURL();} });
       refresh(); box.append(input);
     }
   }
@@ -55,7 +55,7 @@ function buildMatrix() {
     input.addEventListener('input',()=>{
       const v=Number(input.value);
       if(Number.isFinite(v) && v>=0.1 && v<=5) sim.masses[t]=v;
-      refresh();
+      refresh(); scheduleURL();
     });
     refresh(); box.append(input);
   }
@@ -73,43 +73,47 @@ function randomize() {
   sim.randomizeMatrix(newSeed);
   buildMatrix();
 }
-$('randomize').onclick=randomize;
+$('randomize').onclick=()=>{ randomize(); scheduleURL(); };
 $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
-  buildMatrix();
+  buildMatrix(); scheduleURL();
 };
-$('reset').onclick=()=>sim.resetParticles($('seed').value);
+$('reset').onclick=()=>{ sim.resetParticles($('seed').value); scheduleURL(); };
 $('pause').onclick=()=>{running=!running;$('pause').textContent=running?'Pause':'Resume';};
-$('seed').addEventListener('change',()=>{sim.seed=$('seed').value;});
+$('seed').addEventListener('change',()=>{sim.seed=$('seed').value; scheduleURL();});
 $('count').addEventListener('input',()=>$('countOut').textContent=$('count').value);
-$('count').addEventListener('change',()=>{sim.configure({count:Number($('count').value)});});
+$('count').addEventListener('change',()=>{sim.configure({count:Number($('count').value)}); scheduleURL();});
 $('types').addEventListener('input',()=>$('typesOut').textContent=$('types').value);
-$('types').addEventListener('change',()=>{sim.configure({types:Number($('types').value)});buildMatrix();});
+$('types').addEventListener('change',()=>{sim.configure({types:Number($('types').value)});buildMatrix(); scheduleURL();});
 for (const id of ['radius','damping','force','dt']) $(id).addEventListener('input',()=>{
-  const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage();
+  const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); scheduleURL();
 });
-$('wrap').onchange=()=>sim.wrap=$('wrap').checked;
-$('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0;});
-$('save').onclick=()=>{ const blob=new Blob([JSON.stringify(sim.exportPreset(),null,2)],{type:'application/json'}); const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`particle-life-${sim.seed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
-$('share').onclick=()=>{
+$('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
+$('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0; scheduleURL();});
+// update URL bar to reflect current preset
+function updateURL() {
   const d = sim.exportPreset();
-  d._name = prompt('Name this world:', d.seed) || d.seed;
-  d._author = prompt('Your name:', '') || 'Anonymous';
+  d._name = document.title.replace(' - Particle Life Lab','') || d.seed;
+  d._author = 'ballbox-first';
   d.speed = stepsPerFrame;
-  console.log('SHARE: classes='+d.classes+' count='+d.particleCount+' seed='+d.seed+' matrix='+(d.matrix?d.matrix.length+'x'+d.matrix[0].length:'BAD'));
   const json = JSON.stringify(d);
-  console.log('SHARE URL length: '+json.length+' chars, first 80: '+json.substring(0,80));
   const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
-  const fallback = ()=>prompt('Share this link:', url);
+  history.replaceState(null, '', url);
+}
+// debounced auto-update on any change
+let urlDirty = false;
+function scheduleURL() { if(!urlDirty){ urlDirty=true; requestAnimationFrame(()=>{ urlDirty=false; updateURL(); }); } }
+
+$('share').onclick=()=>{
+  updateURL(); // ensure URL bar is fresh
+  const fallback = ()=>prompt('Copy this URL:', location.href);
   if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(()=>{
+    navigator.clipboard.writeText(location.href).then(()=>{
       const btn = $('share'); const t = btn.textContent;
       btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1500);
     }).catch(fallback);
   } else fallback();
 };
-$('load').onclick=()=>$('file').click();
-$('file').onchange=async event=>{ try { sim.importPreset(JSON.parse(await event.target.files[0].text())); syncControls(); } catch(error){ alert(error.message); } event.target.value=''; };
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
 $('forces').onclick=()=>{ showForces=!showForces; $('forces').className=showForces?'active':'secondary'; };
