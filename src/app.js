@@ -102,6 +102,7 @@ $('share').onclick=()=>{
   p.set('damping', d.damping); p.set('force', d.force); p.set('dt', d.dt);
   p.set('wrap', d.wrap); p.set('masses', JSON.stringify(d.masses));
   p.set('matrix', JSON.stringify(d.matrix));
+  p.set('speed', stepsPerFrame);
   const url = location.origin + location.pathname + '?' + p.toString();
   const fallback = ()=>prompt('Share this link:', url);
   if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
@@ -243,6 +244,9 @@ function loadSearchPreset(){
       matrix: JSON.parse(q.get('matrix') || '[]')
     });
     syncControls();
+    // restore speed
+    const s = q.get('speed');
+    if(s){ stepsPerFrame=Number(s); $('speed').value=s; $('speedOut').textContent=s; }
   } catch(e){ console.warn('Invalid preset URL', e); }
 }
 loadSearchPreset();
