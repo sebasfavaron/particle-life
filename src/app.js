@@ -95,8 +95,8 @@ $('share').onclick=()=>{
   const data = sim.exportPreset();
   data._name = prompt('Name this world:', data.seed) || data.seed;
   data._author = prompt('Your name:', '') || 'Anonymous';
-  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-  const url = location.href.split('#')[0] + '#p=' + b64;
+  const b64 = btoa(JSON.stringify(data));
+  const url = location.href.split('#')[0] + '#p=' + encodeURIComponent(b64);
   // Show URL in prompt + try clipboard as bonus
   const fallback = ()=>prompt('Share this link:', url);
   if(navigator.clipboard && navigator.clipboard.writeText) {
@@ -221,7 +221,8 @@ addEventListener('visibilitychange', ()=>{
 function loadHashPreset(){
   if(!location.hash.startsWith('#p=')) return;
   try {
-    const data = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const raw = atob(location.hash.slice(3));
+    const data = JSON.parse(raw);
     sim.importPreset(data);
     syncControls();
   } catch(e){ console.warn('Invalid preset in URL', e); }
