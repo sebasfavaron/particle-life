@@ -133,14 +133,11 @@ function scheduleURL() { if(!urlDirty){ urlDirty=true; requestAnimationFrame(()=
 $('zoomIn').onclick=()=>setWorldScale(worldScale/1.3);
 $('zoomOut').onclick=()=>setWorldScale(worldScale*1.3);
 $('share').onclick=()=>{
-  updateURL(); // ensure URL bar is fresh
-  const fallback = ()=>prompt('Copy this URL:', location.href);
-  if(typeof ClipboardItem!=='undefined' && navigator.clipboard) {
-    navigator.clipboard.writeText(location.href).then(()=>{
-      const btn = $('share'); const t = btn.textContent;
-      btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1500);
-    }).catch(fallback);
-  } else fallback();
+  updateURL();
+  navigator.clipboard.writeText(location.href).then(()=>{
+    const btn = $('share'); btn.textContent='Copied!';
+    setTimeout(()=>btn.textContent='Copy URL',1500);
+  }).catch(()=>{}); // silent fail if clipboard blocked
 };
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
