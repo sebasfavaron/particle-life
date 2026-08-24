@@ -18,7 +18,7 @@
     <label><span>Speed <span class="info-icon">ⓘ<span class="tip">Physics steps per rendered frame. 1 = normal, 100 = fast-forward</span></span></span> <output id="speedOut">1</output><input id="speed" type="range" min="1" max="100" step="1" value="1"></label>
     <label class="check"><input id="wrap" type="checkbox" checked>Wrap edges <span class="info-icon">ⓘ<span class="tip">Particles wrap around edges vs. bounce off</span></span></label>
   <div class="actions"><button id="nudge">Nudge parameters</button></div></section>
-  <section><div class="section-title"><h2>Interaction matrix</h2><span>row feels column</span></div><div id="matrix"></div><div class="legend"><i>− repel</i><i>0 neutral</i><i>+ attract</i></div><div class="actions" style="margin-top:10px"><button id="randomize" class="primary">Randomize matrix</button><button id="rndmass">Randomize masses</button><button id="rndall">Randomize all</button></div></section>
+  <section><div class="section-title"><h2>Interaction matrix</h2><span>row feels column</span></div><div id="matrix"></div><div class="legend"><i>− repel</i><i>0 neutral</i><i>+ attract</i></div><div class="actions matrix-actions"><button id="randomize" class="primary">Randomize matrix</button><button id="rndmass">Randomize masses</button><button id="rndall">Randomize all</button></div></section>
   <section class="actions"><button id="zoomOut">−</button><span id="zoomLabel" style="color:#b9c7da">Zoom</span><button id="zoomIn">+</button>
 <button id="share" class="primary">Copy URL</button><button id="forces" class="secondary">Show forces</button></section>
   <footer>Space: pause · R: randomize · grid cell size = interaction radius</footer>

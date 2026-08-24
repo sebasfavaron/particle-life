@@ -1,22 +1,46 @@
 import { ParticleLife } from './engine.js';
 
 const $ = id => document.getElementById(id);
-// Tooltip positioning — shows above icon, never clipped by aside overflow
-document.addEventListener('mouseenter', e => {
-  const icon = e.target.closest('.info-icon');
-  if(!icon) return;
-  const tip = icon.querySelector('.tip');
-  if(!tip) return;
-  const r = icon.getBoundingClientRect();
-  tip.style.left = r.left + 'px';
-  tip.style.top = (r.top - 22) + 'px';
-  tip.style.display = 'block';
-  tip.style.bottom = 'auto';
-}, true);
-document.addEventListener('mouseleave', e => {
-  const icon = e.target.closest('.info-icon');
-  if(icon) { const tip = icon.querySelector('.tip'); if(tip) tip.style.display = ''; }
-}, true);
+// One root-level layer avoids the independently scrolling sidebar and its zoomed coordinates.
+const appTooltip = document.createElement('div');
+appTooltip.id = 'appTooltip';
+appTooltip.role = 'tooltip';
+appTooltip.hidden = true;
+document.documentElement.append(appTooltip);
+let tooltipIcon = null;
+
+function placeTooltip(icon) {
+  const source = icon.querySelector('.tip');
+  if(!source) return;
+  appTooltip.textContent = source.textContent;
+  appTooltip.hidden = false;
+  appTooltip.style.visibility = 'hidden';
+  appTooltip.style.left = '0';
+  appTooltip.style.top = '0';
+  const iconBox = icon.getBoundingClientRect();
+  const tipBox = appTooltip.getBoundingClientRect();
+  const margin = 6;
+  const left = Math.max(margin, Math.min(innerWidth - tipBox.width - margin, iconBox.left + iconBox.width / 2 - tipBox.width / 2));
+  const above = iconBox.top - tipBox.height - margin;
+  const top = above >= margin ? above : Math.min(innerHeight - tipBox.height - margin, iconBox.bottom + margin);
+  appTooltip.style.left = `${left}px`;
+  appTooltip.style.top = `${top}px`;
+  appTooltip.style.visibility = '';
+}
+function hideTooltip() { tooltipIcon = null; appTooltip.hidden = true; }
+document.addEventListener('pointerover', event => {
+  const icon = event.target.closest('.info-icon');
+  if(!icon || icon === tooltipIcon) return;
+  tooltipIcon = icon;
+  placeTooltip(icon);
+});
+document.addEventListener('pointerout', event => {
+  const icon = event.target.closest('.info-icon');
+  if(icon && !icon.contains(event.relatedTarget)) hideTooltip();
+});
+addEventListener('resize', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
+addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
+document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const box = canvas.getBoundingClientRect();
