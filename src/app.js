@@ -353,12 +353,18 @@ function loop(now) {
 resize(); // sync pre-resize — ensures fill covers canvas
 syncZoomLabel();
 window.particleLife=sim;
-// Keep the world advancing when the tab is hidden. RAF can be paused by browsers,
-// so use a deliberately light 4-step-per-second timer without changing the user's Speed setting.
-const BACKGROUND_STEP_MS = 250;
+// Hidden tabs skip rendering and spend the saved time on physics. Browsers can still throttle
+// timers, but each delivered callback advances as far as a near-full-core work budget allows.
+const BACKGROUND_STEP_MS = 100, BACKGROUND_WORK_BUDGET_MS = 90, BACKGROUND_MAX_STEPS = 1000;
 let backgroundStepTimer = null;
 function advanceInBackground() {
-  if(document.hidden && running && !scanning) sim.step();
+  if(!document.hidden || !running || scanning) return;
+  const started = performance.now();
+  let steps = 0;
+  while(running && !scanning && steps < BACKGROUND_MAX_STEPS && performance.now() - started < BACKGROUND_WORK_BUDGET_MS) {
+    sim.step();
+    steps++;
+  }
 }
 function startBackgroundSteps() {
   if(backgroundStepTimer === null) backgroundStepTimer = setInterval(advanceInBackground, BACKGROUND_STEP_MS);
