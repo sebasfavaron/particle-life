@@ -148,6 +148,7 @@ export class ParticleLife {
           if (neighbor < cell || head[neighbor] === -1) continue;
 
           for (let i = head[cell]; i !== -1; i = next[i]) {
+            const source = kind[i];
             const firstJ = neighbor === cell ? next[i] : head[neighbor];
             for (let j = firstJ; j !== -1; j = next[j]) {
               let dx = x[j] - x[i], dy = y[j] - y[i];
@@ -157,12 +158,20 @@ export class ParticleLife {
               }
               const d2 = dx * dx + dy * dy;
               if (d2 <= 0 || d2 >= r2) continue;
-              const d = Math.sqrt(d2), q = d * invR;
-              const curveI = q < beta ? q / beta - 1 : matrix[kind[i] * types + kind[j]] * (1 - Math.abs(2 * q - 1 - beta) / (1 - beta));
-              const curveJ = q < beta ? q / beta - 1 : matrix[kind[j] * types + kind[i]] * (1 - Math.abs(2 * q - 1 - beta) / (1 - beta));
-              const invD = 1 / d;
-              accX[i] += dx * curveI * invD; accY[i] += dy * curveI * invD;
-              accX[j] -= dx * curveJ * invD; accY[j] -= dy * curveJ * invD;
+              const d = Math.sqrt(d2), q = d * invR, invD = 1 / d;
+              const directionX = dx * invD, directionY = dy * invD, target = kind[j];
+              if (q < beta) {
+                const curve = q / beta - 1;
+                const forceX = directionX * curve, forceY = directionY * curve;
+                accX[i] += forceX; accY[i] += forceY;
+                accX[j] -= forceX; accY[j] -= forceY;
+              } else {
+                const envelope = 1 - Math.abs(2 * q - 1 - beta) / (1 - beta);
+                const forceX = directionX * envelope, forceY = directionY * envelope;
+                const influenceI = matrix[source * types + target], influenceJ = matrix[target * types + source];
+                accX[i] += forceX * influenceI; accY[i] += forceY * influenceI;
+                accX[j] -= forceX * influenceJ; accY[j] -= forceY * influenceJ;
+              }
             }
           }
         }
