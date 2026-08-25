@@ -321,8 +321,8 @@ function loop(now) {
   if(firstFrame){ firstFrame=false; resize(); }
   const start=performance.now();
   if(running && !scanning) {
-    // auto-cap steps to stay within frame budget
-    const budget = Math.max(1, stepsPerFrame);
+    // Background work stays intentionally tiny; the timer below keeps it alive if RAF is throttled.
+    const budget = document.hidden ? 1 : Math.max(1, stepsPerFrame);
     let capped;
     if(stepTimeEstimate > 0) {
       // leave half the frame for draw
@@ -333,9 +333,9 @@ function loop(now) {
     }
     for(let s=0;s<capped;s++) sim.step();
   }
-  draw();
+  if(!document.hidden) draw();
   const elapsed=performance.now()-start; frames++; frameSum+=elapsed;
-  if(now-sampleAt>=500){
+  if(!document.hidden && now-sampleAt>=500){
     const msPerStep = stepTimeEstimate > 0 ? stepTimeEstimate : frameSum/frames/stepsPerFrame;
     const fps=frames*1000/(now-sampleAt);
     $('fps').textContent=`${fps.toFixed(0)} FPS`;
@@ -353,23 +353,25 @@ function loop(now) {
 resize(); // sync pre-resize — ensures fill covers canvas
 syncZoomLabel();
 window.particleLife=sim;
-// auto-reset speed to 1 when tab becomes visible again
+// Keep the world advancing when the tab is hidden. RAF can be paused by browsers,
+// so use a deliberately light 4-step-per-second timer without changing the user's Speed setting.
+const BACKGROUND_STEP_MS = 250;
+let backgroundStepTimer = null;
+function advanceInBackground() {
+  if(document.hidden && running && !scanning) sim.step();
+}
+function startBackgroundSteps() {
+  if(backgroundStepTimer === null) backgroundStepTimer = setInterval(advanceInBackground, BACKGROUND_STEP_MS);
+}
+function stopBackgroundSteps() {
+  if(backgroundStepTimer !== null) clearInterval(backgroundStepTimer);
+  backgroundStepTimer = null;
+}
 addEventListener('visibilitychange', ()=>{
-  if(document.hidden && stepsPerFrame>1) {
-    // when leaving, store speed and set to 1
-    window._savedSpeed = stepsPerFrame;
-    stepsPerFrame = 1;
-    $('speed').value = 1;
-    $('speedOut').textContent = '1';
-  } else if(!document.hidden && window._savedSpeed) {
-    // when returning, restore — but also reset step time estimate so it calibrates fresh
-    stepsPerFrame = window._savedSpeed;
-    $('speed').value = window._savedSpeed;
-    $('speedOut').textContent = String(window._savedSpeed);
-    stepTimeEstimate = 0;
-    window._savedSpeed = null;
-  }
+  if(document.hidden) startBackgroundSteps();
+  else { stopBackgroundSteps(); stepTimeEstimate = 0; }
 });
+if(document.hidden) startBackgroundSteps();
 function loadSearchPreset(){
   const q = new URLSearchParams(location.search);
   const raw = q.get('preset');
