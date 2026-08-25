@@ -719,6 +719,23 @@ export class WebGpuParticleLifeBackend {
     return count;
   }
 
+  /** Read active GPU state for correctness tests only. Never call this from normal rendering. */
+  async readStateForValidation() {
+    this._assertDeviceReady();
+    const mapMode = globalThis.GPUMapMode;
+    if (!mapMode) throw new WebGpuAvailabilityError('GPUMapMode is unavailable.', { code: 'api-incomplete' });
+    const size = 16 * this.config.particleCount;
+    const readback = this._makeBuffer('particle-life-validation-readback', size, this._usage.COPY_DST | this._usage.MAP_READ);
+    const encoder = this.device.createCommandEncoder({ label: 'particle-life-validation-readback-encoder' });
+    const source = this.activeStateIndex === 0 ? this.buffers.stateA : this.buffers.stateB;
+    encoder.copyBufferToBuffer(source, 0, readback, 0, size);
+    this.device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(mapMode.READ);
+    const state = new Float32Array(readback.getMappedRange().slice(0));
+    readback.unmap(); readback.destroy();
+    return state;
+  }
+
   /** Wait for work already submitted to the GPU. Use for diagnostics, never each frame. */
   async waitForIdle() {
     this._assertDeviceReady();

@@ -27,6 +27,7 @@
       <h1>WebGPU validation</h1>
       <button id="run" type="button" disabled>Start</button>
       <button id="reset" type="button" disabled>Reset</button>
+      <button id="oracle" type="button" disabled>Run physics checks</button>
       <label>Particles
         <select id="count" disabled>
           <option value="2000">2k</option>
@@ -54,6 +55,7 @@
     const canvas = document.querySelector('#world');
     const runButton = document.querySelector('#run');
     const resetButton = document.querySelector('#reset');
+    const oracleButton = document.querySelector('#oracle');
     const countSelect = document.querySelector('#count');
     const status = document.querySelector('#status');
     const metrics = document.querySelector('#metrics');
@@ -146,6 +148,7 @@
       stop();
       runButton.disabled = true;
       resetButton.disabled = true;
+      oracleButton.disabled = true;
       countSelect.disabled = true;
       setStatus(`WebGPU error — simulation stopped: ${error.message}`, 'error');
     }
@@ -168,6 +171,60 @@
       setStatus(`WebGPU ${running ? 'active' : 'paused'} · CPU state uploaded exactly · ${upload.count.toLocaleString()} particles`);
     }
 
+    function makeOracleEngine(testCase) {
+      const engine = new ParticleLife({
+        width: testCase.width, height: testCase.height, count: 2, types: testCase.types,
+        radius: testCase.radius, force: testCase.force, damping: testCase.damping, dt: testCase.dt,
+        wrap: testCase.wrap, seed: `oracle-${testCase.name}`,
+      });
+      engine.x.set(testCase.x); engine.y.set(testCase.y); engine.vx.set(testCase.vx); engine.vy.set(testCase.vy);
+      engine.kind.set(testCase.kinds); engine.matrix.set(testCase.matrix); engine.masses.set(testCase.masses);
+      return engine;
+    }
+    function interleavedState(engine) {
+      const state = new Float32Array(engine.count * 4);
+      for (let i = 0; i < engine.count; i++) {
+        state[i * 4] = engine.x[i]; state[i * 4 + 1] = engine.y[i];
+        state[i * 4 + 2] = engine.vx[i]; state[i * 4 + 3] = engine.vy[i];
+      }
+      return state;
+    }
+    async function runPhysicsChecks() {
+      if (!backend) return;
+      const wasRunning = running; stop(); oracleButton.disabled = true;
+      const cases = [
+        { name: 'asymmetric matrix', width: 120, height: 100, types: 2, radius: 80, force: .02, damping: .7, dt: 1, wrap: true, x: [30, 70], y: [50, 50], vx: [0, 0], vy: [0, 0], kinds: [0, 1], matrix: [0, .9, -.4, 0], masses: [1, 1] },
+        { name: 'universal short-range repulsion', width: 120, height: 100, types: 2, radius: 80, force: .02, damping: .7, dt: 1, wrap: true, x: [50, 60], y: [50, 50], vx: [0, 0], vy: [0, 0], kinds: [0, 1], matrix: [0, 0, 0, 0], masses: [1, 1.5] },
+        { name: 'one-cell wrapped world', width: 50, height: 50, types: 1, radius: 60, force: .02, damping: .7, dt: 1, wrap: true, x: [2, 48], y: [25, 25], vx: [0, 0], vy: [0, 0], kinds: [0, 0], matrix: [0], masses: [1] },
+        { name: 'non-wrap bounce', width: 100, height: 80, types: 1, radius: 10, force: .02, damping: .7, dt: 1, wrap: false, x: [95, 20], y: [40, 40], vx: [10, 0], vy: [0, 0], kinds: [0, 0], matrix: [0], masses: [1] },
+      ];
+      let result = '', resultState = 'ready';
+      try {
+        for (const testCase of cases) {
+          const cpu = makeOracleEngine(testCase), input = interleavedState(cpu);
+          cpu.step();
+          backend.reset({
+            width: testCase.width, height: testCase.height, count: 2, types: testCase.types,
+            radius: testCase.radius, force: testCase.force, damping: testCase.damping, dt: testCase.dt,
+            wrap: testCase.wrap, states: input, kinds: Uint32Array.from(testCase.kinds),
+            drawOrder: new Uint32Array([0, 1]), matrix: Float32Array.from(testCase.matrix), masses: Float32Array.from(testCase.masses),
+          });
+          backend.stepMany(1); await backend.waitForIdle();
+          const gpu = await backend.readStateForValidation(), expected = interleavedState(cpu);
+          let maxError = 0;
+          for (let i = 0; i < gpu.length; i++) maxError = Math.max(maxError, Math.abs(gpu[i] - expected[i]));
+          if (maxError > 1e-4) throw new Error(`${testCase.name}: max error ${maxError}`);
+        }
+        result = 'Physics checks passed · asymmetric, short-range, wrap, bounce';
+      } catch (error) {
+        result = `Physics checks failed: ${error.message}`; resultState = 'error';
+      } finally {
+        resetFromCpu(); oracleButton.disabled = false;
+        setStatus(result, resultState);
+        if (wasRunning) start();
+      }
+    }
+
     runButton.addEventListener('click', () => {
       if (running) {
         stop();
@@ -177,6 +234,7 @@
       }
     });
     resetButton.addEventListener('click', resetFromCpu);
+    oracleButton.addEventListener('click', runPhysicsChecks);
     countSelect.addEventListener('change', resetFromCpu);
 
     async function initialize() {
@@ -189,12 +247,14 @@
             stop();
             runButton.disabled = true;
             resetButton.disabled = true;
+            oracleButton.disabled = true;
             countSelect.disabled = true;
             setStatus(`CPU fallback / device unavailable — simulation stopped (${metadata.lossReason})`, 'error');
           },
         });
         runButton.disabled = false;
         resetButton.disabled = false;
+        oracleButton.disabled = false;
         countSelect.disabled = false;
         backend.render();
         start();
