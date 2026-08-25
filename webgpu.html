@@ -28,6 +28,7 @@
       <button id="run" type="button" disabled>Start</button>
       <button id="reset" type="button" disabled>Reset</button>
       <button id="oracle" type="button" disabled>Run physics checks</button>
+      <button id="benchmark" type="button" disabled>CPU vs GPU</button>
       <label>Particles
         <select id="count" disabled>
           <option value="2000">2k</option>
@@ -56,6 +57,7 @@
     const runButton = document.querySelector('#run');
     const resetButton = document.querySelector('#reset');
     const oracleButton = document.querySelector('#oracle');
+    const benchmarkButton = document.querySelector('#benchmark');
     const countSelect = document.querySelector('#count');
     const status = document.querySelector('#status');
     const metrics = document.querySelector('#metrics');
@@ -102,13 +104,12 @@
       status.dataset.state = state;
     }
 
+    function makeCpuEngine(particleCount) {
+      return new ParticleLife({ width: WORLD_WIDTH, height: WORLD_HEIGHT, count: particleCount });
+    }
     function makeCpuUpload(particleCount) {
       // The CPU engine remains the single source of the initialized validation state.
-      const engine = new ParticleLife({
-        width: WORLD_WIDTH,
-        height: WORLD_HEIGHT,
-        count: particleCount,
-      });
+      const engine = makeCpuEngine(particleCount);
       const { x, y, vx, vy, kind, matrix, masses, drawOrder } = engine;
       const states = new Float32Array(particleCount * 4);
       for (let i = 0; i < particleCount; i += 1) {
@@ -149,6 +150,7 @@
       runButton.disabled = true;
       resetButton.disabled = true;
       oracleButton.disabled = true;
+      benchmarkButton.disabled = true;
       countSelect.disabled = true;
       setStatus(`WebGPU error — simulation stopped: ${error.message}`, 'error');
     }
@@ -225,6 +227,35 @@
       }
     }
 
+    async function runBenchmark() {
+      if (!backend) return;
+      stop(); oracleButton.disabled = true; benchmarkButton.disabled = true;
+      const count = Number(countSelect.value), measuredTicks = 10, warmupTicks = 2;
+      let result = '', resultState = 'ready', resultMetric = '';
+      try {
+        setStatus(`Benchmarking CPU and GPU · ${count.toLocaleString()} particles · no queue`);
+        const cpu = makeCpuEngine(count);
+        for (let i = 0; i < warmupTicks; i++) cpu.step();
+        let started = performance.now();
+        for (let i = 0; i < measuredTicks; i++) cpu.step();
+        const cpuMs = (performance.now() - started) / measuredTicks;
+
+        backend.reset(makeCpuUpload(count));
+        for (let i = 0; i < warmupTicks; i++) { backend.stepMany(1); await backend.waitForIdle(); }
+        started = performance.now();
+        for (let i = 0; i < measuredTicks; i++) { backend.stepMany(1); backend.render(); await backend.waitForIdle(); }
+        const gpuMs = (performance.now() - started) / measuredTicks;
+        resultMetric = `CPU ${cpuMs.toFixed(2)} ms/tick · GPU ${gpuMs.toFixed(2)} ms/tick · ${(cpuMs / gpuMs).toFixed(2)}×`;
+        result = `CPU vs GPU complete · ${count.toLocaleString()} particles · same initial seed/settings`;
+      } catch (error) {
+        result = `Benchmark failed: ${error.message}`; resultState = 'error';
+      } finally {
+        resetFromCpu(); oracleButton.disabled = false; benchmarkButton.disabled = false;
+        setStatus(result, resultState);
+        if (resultMetric) metrics.textContent = resultMetric;
+      }
+    }
+
     runButton.addEventListener('click', () => {
       if (running) {
         stop();
@@ -235,6 +266,7 @@
     });
     resetButton.addEventListener('click', resetFromCpu);
     oracleButton.addEventListener('click', runPhysicsChecks);
+    benchmarkButton.addEventListener('click', runBenchmark);
     countSelect.addEventListener('change', resetFromCpu);
 
     async function initialize() {
@@ -248,6 +280,7 @@
             runButton.disabled = true;
             resetButton.disabled = true;
             oracleButton.disabled = true;
+            benchmarkButton.disabled = true;
             countSelect.disabled = true;
             setStatus(`CPU fallback / device unavailable — simulation stopped (${metadata.lossReason})`, 'error');
           },
@@ -255,6 +288,7 @@
         runButton.disabled = false;
         resetButton.disabled = false;
         oracleButton.disabled = false;
+        benchmarkButton.disabled = false;
         countSelect.disabled = false;
         backend.render();
         start();
