@@ -61,28 +61,38 @@
     let backend = null;
     let timer = null;
     let running = false;
-    let metricWindowStarted = performance.now(), metricTicks = 0, submitSamples = [], queueDelayMs = null, nextQueueProbe = 0;
+    let metricWindowStarted = performance.now(), metricTicks = 0, submitSamples = [], queueDelayMs = null;
 
     function resetMetrics() {
-      metricWindowStarted = performance.now(); metricTicks = 0; submitSamples = []; queueDelayMs = null; nextQueueProbe = 0;
+      metricWindowStarted = performance.now(); metricTicks = 0; submitSamples = []; queueDelayMs = null;
       metrics.textContent = 'Metrics warming up…';
     }
-    function recordTick() {
-      const started = performance.now();
+    async function recordTick() {
+      const submittedAt = performance.now();
       backend.stepMany(1); backend.render();
-      submitSamples.push(performance.now() - started); metricTicks++;
+      submitSamples.push(performance.now() - submittedAt);
+      // Validation mode deliberately waits. This reports sustainable GPU work, not queued work.
+      queueDelayMs = await backend.waitForIdle();
+      metricTicks++;
       const now = performance.now();
-      if (now >= nextQueueProbe) {
-        nextQueueProbe = now + 1000;
-        backend.waitForIdle().then(delay => { queueDelayMs = delay; }).catch(failDuringRun);
-      }
       if (now - metricWindowStarted < 1000) return;
       submitSamples.sort((a, b) => a - b);
       const p95 = submitSamples[Math.floor(submitSamples.length * .95)] ?? 0;
       const ticksPerSecond = metricTicks * 1000 / (now - metricWindowStarted);
-      const queue = queueDelayMs === null ? 'sampling…' : `${queueDelayMs.toFixed(1)} ms`;
-      metrics.textContent = `${ticksPerSecond.toFixed(1)} ticks/s · submit p95 ${p95.toFixed(2)} ms · GPU queue ${queue}`;
+      metrics.textContent = `${ticksPerSecond.toFixed(1)} sustainable ticks/s · submit p95 ${p95.toFixed(2)} ms · GPU tick ${queueDelayMs.toFixed(1)} ms`;
       metricWindowStarted = now; metricTicks = 0; submitSamples = [];
+    }
+    async function scheduleTick() {
+      if (!running) return;
+      const started = performance.now();
+      try {
+        await recordTick();
+      } catch (error) {
+        failDuringRun(error);
+        return;
+      }
+      if (!running) return;
+      timer = window.setTimeout(scheduleTick, Math.max(0, 1000 / TICK_HZ - (performance.now() - started)));
     }
 
     function setStatus(message, state = 'ready') {
@@ -126,7 +136,7 @@
     }
 
     function stop() {
-      if (timer !== null) window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
       timer = null;
       running = false;
       runButton.textContent = 'Start';
@@ -146,13 +156,7 @@
       runButton.textContent = 'Pause';
       resetMetrics();
       setStatus(`WebGPU active · ${countSelect.selectedOptions[0].textContent} particles · fixed ${TICK_HZ} Hz`);
-      timer = window.setInterval(() => {
-        try {
-          recordTick();
-        } catch (error) {
-          failDuringRun(error);
-        }
-      }, 1000 / TICK_HZ);
+      scheduleTick();
     }
 
     function resetFromCpu() {
