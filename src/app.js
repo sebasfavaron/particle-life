@@ -153,6 +153,11 @@ $('types').addEventListener('change',()=>{sim.configure({types:Number($('types')
 for (const id of ['radius','damping','force','dt']) $(id).addEventListener('input',()=>{
   const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); scheduleURL();
 });
+let showRadiusPreview = false;
+const radiusControl = $('radius');
+radiusControl.addEventListener('pointerdown', () => { showRadiusPreview = true; });
+for (const event of ['pointerup', 'pointercancel']) addEventListener(event, () => { showRadiusPreview = false; });
+radiusControl.addEventListener('blur', () => { showRadiusPreview = false; });
 $('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
 $('nudge').onclick=()=>{
   const steps = { count: 1000, radius: 2, damping: 0.02, force: 0.005, dt: 0.1 };
@@ -247,6 +252,23 @@ $('scan').onclick=()=>{
   requestAnimationFrame(batch);
 };
 
+function drawRadiusPreview() {
+  const x = sim.width / 2, y = sim.height / 2, radius = sim.radius;
+  ctx.save();
+  ctx.fillStyle = '#ffd16614';
+  ctx.strokeStyle = '#ffd166dd';
+  ctx.lineWidth = 1.5 * worldScale;
+  ctx.setLineDash([4 * worldScale, 3 * worldScale]);
+  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(x, y, 2 * worldScale, 0, Math.PI * 2); ctx.fillStyle = '#ffd166'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + radius, y); ctx.stroke();
+  ctx.fillStyle = '#ffd166';
+  ctx.font = `${11 * worldScale}px ui-monospace, monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`interaction radius: ${radius}`, x, y - radius - 6 * worldScale);
+  ctx.restore();
+}
 function draw() {
   // fill ALL physical pixels regardless of transform/dpr
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
@@ -258,6 +280,7 @@ function draw() {
     for(let p=sim.typeOffsets[t];p<sim.typeOffsets[t+1];p++){const i=sim.drawOrder[p];ctx.rect(sim.x[i],sim.y[i],size,size);}
     ctx.fill();
   }
+  if(showRadiusPreview) drawRadiusPreview();
   if(showForces) {
     const scale=8, maxArrows=2000;
     let drawn=0;
