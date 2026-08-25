@@ -70,6 +70,7 @@ export class ParticleLife {
     this.x = new Float32Array(n); this.y = new Float32Array(n);
     this.vx = new Float32Array(n); this.vy = new Float32Array(n);
     this.fx = new Float32Array(n); this.fy = new Float32Array(n);
+    this.accX = new Float64Array(n); this.accY = new Float64Array(n);
     this.kind = new Uint8Array(n); this.next = new Int32Array(n);
     const random = ParticleLife.rng(this.seed + ':particles:' + n + ':' + this.types);
     for (let i = 0; i < n; i++) {
@@ -100,6 +101,7 @@ export class ParticleLife {
     this.cols = Math.max(1, Math.ceil(this.width / this.cellSize));
     this.rows = Math.max(1, Math.ceil(this.height / this.cellSize));
     this.head = new Int32Array(this.cols * this.rows);
+    this.cellMarks = new Int32Array(this.cols * this.rows);
   }
 
   buildGrid() {
@@ -117,53 +119,65 @@ export class ParticleLife {
     this.buildGrid();
     const { count, radius, width, height, cols, rows, types, matrix, masses, wrap } = this;
     const r2 = radius * radius, invR = 1 / radius, beta = this.beta;
-    const scale = this.force * this.dt;
-    const damp = Math.pow(this.damping, this.dt);
-    const nextX = this.x, nextY = this.y, vx = this.vx, vy = this.vy, kind = this.kind;
-    for (let i = 0; i < count; i++) {
-      const px = nextX[i], py = nextY[i], source = kind[i];
-      const baseX = Math.min(cols - 1, Math.max(0, Math.floor(px / this.cellSize)));
-      const baseY = Math.min(rows - 1, Math.max(0, Math.floor(py / this.cellSize)));
-      let fx = 0, fy = 0;
+    const scale = this.force * this.dt, damp = Math.pow(this.damping, this.dt);
+    const x = this.x, y = this.y, vx = this.vx, vy = this.vy, kind = this.kind;
+    const accX = this.accX, accY = this.accY, fxOut = this.fx, fyOut = this.fy;
+    const head = this.head, next = this.next, cellMarks = this.cellMarks;
+    accX.fill(0); accY.fill(0);
+
+    // Each cell pair is visited once. cellMarks handles wrap aliases when a world has < 3 cells.
+    for (let cell = 0; cell < head.length; cell++) {
+      if (head[cell] === -1) continue;
+      const baseX = cell % cols, baseY = Math.floor(cell / cols), stamp = cell + 1;
       for (let oy = -1; oy <= 1; oy++) {
         let cy = baseY + oy;
         if (wrap) cy = (cy + rows) % rows; else if (cy < 0 || cy >= rows) continue;
         for (let ox = -1; ox <= 1; ox++) {
           let cx = baseX + ox;
           if (wrap) cx = (cx + cols) % cols; else if (cx < 0 || cx >= cols) continue;
-          for (let j = this.head[cy * cols + cx]; j !== -1; j = this.next[j]) {
-            if (j === i) continue;
-            let dx = nextX[j] - px, dy = nextY[j] - py;
-            if (wrap) {
-              if (dx > width * 0.5) dx -= width; else if (dx < -width * 0.5) dx += width;
-              if (dy > height * 0.5) dy -= height; else if (dy < -height * 0.5) dy += height;
+          const neighbor = cy * cols + cx;
+          if (cellMarks[neighbor] === stamp) continue;
+          cellMarks[neighbor] = stamp;
+          if (neighbor < cell || head[neighbor] === -1) continue;
+
+          for (let i = head[cell]; i !== -1; i = next[i]) {
+            const firstJ = neighbor === cell ? next[i] : head[neighbor];
+            for (let j = firstJ; j !== -1; j = next[j]) {
+              let dx = x[j] - x[i], dy = y[j] - y[i];
+              if (wrap) {
+                if (dx > width * 0.5) dx -= width; else if (dx < -width * 0.5) dx += width;
+                if (dy > height * 0.5) dy -= height; else if (dy < -height * 0.5) dy += height;
+              }
+              const d2 = dx * dx + dy * dy;
+              if (d2 <= 0 || d2 >= r2) continue;
+              const d = Math.sqrt(d2), q = d * invR;
+              const curveI = q < beta ? q / beta - 1 : matrix[kind[i] * types + kind[j]] * (1 - Math.abs(2 * q - 1 - beta) / (1 - beta));
+              const curveJ = q < beta ? q / beta - 1 : matrix[kind[j] * types + kind[i]] * (1 - Math.abs(2 * q - 1 - beta) / (1 - beta));
+              const invD = 1 / d;
+              accX[i] += dx * curveI * invD; accY[i] += dy * curveI * invD;
+              accX[j] -= dx * curveJ * invD; accY[j] -= dy * curveJ * invD;
             }
-            const d2 = dx * dx + dy * dy;
-            if (d2 <= 0 || d2 >= r2) continue;
-            const d = Math.sqrt(d2), q = d * invR;
-            const attraction = matrix[source * types + kind[j]];
-            const curve = q < beta ? q / beta - 1 : attraction * (1 - Math.abs(2 * q - 1 - beta) / (1 - beta));
-            const f = curve / d; fx += dx * f; fy += dy * f;
           }
         }
       }
-      vx[i] = (vx[i] + fx * scale / masses[source]) * damp;
-      vy[i] = (vy[i] + fy * scale / masses[source]) * damp;
-      this.fx[i] = fx; this.fy[i] = fy;
     }
+
     const move = this.dt;
     for (let i = 0; i < count; i++) {
-      let nx = nextX[i] + vx[i] * move, ny = nextY[i] + vy[i] * move;
+      const forceX = accX[i], forceY = accY[i];
+      vx[i] = (vx[i] + forceX * scale / masses[kind[i]]) * damp;
+      vy[i] = (vy[i] + forceY * scale / masses[kind[i]]) * damp;
+      fxOut[i] = forceX; fyOut[i] = forceY;
+      let nx = x[i] + vx[i] * move, ny = y[i] + vy[i] * move;
       if (wrap) {
         nx = ((nx % width) + width) % width; ny = ((ny % height) + height) % height;
       } else {
         if (nx < 0 || nx > width) { vx[i] *= -0.8; nx = Math.min(width, Math.max(0, nx)); }
         if (ny < 0 || ny > height) { vy[i] *= -0.8; ny = Math.min(height, Math.max(0, ny)); }
       }
-      nextX[i] = nx; nextY[i] = ny;
+      x[i] = nx; y[i] = ny;
     }
   }
-
   exportPreset() {
     return { version: 1, seed: this.seed, particleCount: this.count, classes: this.types,
       interactionRadius: this.radius, damping: this.damping, force: this.force, dt: this.dt,
@@ -175,7 +189,7 @@ export class ParticleLife {
   importPreset(data) {
     if (!data || !Array.isArray(data.matrix) || !data.matrix.length) throw new Error('Invalid preset matrix');
     const types = data.matrix.length;
-    if (types < 1 || types > 40 || data.matrix.some(row => !Array.isArray(row) || row.length !== types)) throw new Error('Matrix must be square (1–12)');
+    if (types < 1 || types > 40 || data.matrix.some(row => !Array.isArray(row) || row.length !== types)) throw new Error('Matrix must be square (1–40)');
     this.types = types; this.count = Math.max(100, Math.min(50000, Number(data.particleCount ?? this.count)));
     this.radius = Number(data.interactionRadius ?? this.radius); this.damping = Number(data.damping ?? this.damping);
     this.force = Number(data.force ?? this.force); this.dt = Number(data.dt ?? this.dt); this.wrap = Boolean(data.wrap ?? this.wrap);
