@@ -14,7 +14,8 @@
     button, select { min-height: 34px; border: 1px solid #41506a; border-radius: 6px; background: #172033; color: inherit; padding: 0 12px; }
     button:disabled, select:disabled { opacity: .5; }
     label { display: flex; align-items: center; gap: 6px; color: #b9c6d9; font-size: .85rem; }
-    #status { width: 100%; color: #aebcd0; font: 12px/1.4 ui-monospace, monospace; }
+    #status, #metrics { width: 100%; color: #aebcd0; font: 12px/1.4 ui-monospace, monospace; }
+    #metrics { color: #72e0b5; }
     #status[data-state="ready"] { color: #72e0b5; }
     #status[data-state="error"] { color: #ff9b9b; }
     canvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; background: #000; border: 1px solid #263249; border-radius: 8px; }
@@ -30,9 +31,12 @@
         <select id="count" disabled>
           <option value="2000">2k</option>
           <option value="10000">10k</option>
+          <option value="20000">20k</option>
+          <option value="30000">30k</option>
         </select>
       </label>
       <div id="status" data-state="loading" role="status" aria-live="polite">Initializing CPU state, then requesting WebGPU…</div>
+      <div id="metrics" aria-live="polite">Metrics pending</div>
     </header>
     <canvas id="world" width="1200" height="800" aria-label="Particle Life WebGPU canvas"></canvas>
   </main>
@@ -52,10 +56,34 @@
     const resetButton = document.querySelector('#reset');
     const countSelect = document.querySelector('#count');
     const status = document.querySelector('#status');
+    const metrics = document.querySelector('#metrics');
 
     let backend = null;
     let timer = null;
     let running = false;
+    let metricWindowStarted = performance.now(), metricTicks = 0, submitSamples = [], queueDelayMs = null, nextQueueProbe = 0;
+
+    function resetMetrics() {
+      metricWindowStarted = performance.now(); metricTicks = 0; submitSamples = []; queueDelayMs = null; nextQueueProbe = 0;
+      metrics.textContent = 'Metrics warming up…';
+    }
+    function recordTick() {
+      const started = performance.now();
+      backend.stepMany(1); backend.render();
+      submitSamples.push(performance.now() - started); metricTicks++;
+      const now = performance.now();
+      if (now >= nextQueueProbe) {
+        nextQueueProbe = now + 1000;
+        backend.waitForIdle().then(delay => { queueDelayMs = delay; }).catch(failDuringRun);
+      }
+      if (now - metricWindowStarted < 1000) return;
+      submitSamples.sort((a, b) => a - b);
+      const p95 = submitSamples[Math.floor(submitSamples.length * .95)] ?? 0;
+      const ticksPerSecond = metricTicks * 1000 / (now - metricWindowStarted);
+      const queue = queueDelayMs === null ? 'sampling…' : `${queueDelayMs.toFixed(1)} ms`;
+      metrics.textContent = `${ticksPerSecond.toFixed(1)} ticks/s · submit p95 ${p95.toFixed(2)} ms · GPU queue ${queue}`;
+      metricWindowStarted = now; metricTicks = 0; submitSamples = [];
+    }
 
     function setStatus(message, state = 'ready') {
       status.textContent = message;
@@ -116,11 +144,11 @@
       if (!backend || running) return;
       running = true;
       runButton.textContent = 'Pause';
+      resetMetrics();
       setStatus(`WebGPU active · ${countSelect.selectedOptions[0].textContent} particles · fixed ${TICK_HZ} Hz`);
       timer = window.setInterval(() => {
         try {
-          backend.stepMany(1);
-          backend.render();
+          recordTick();
         } catch (error) {
           failDuringRun(error);
         }
@@ -132,6 +160,7 @@
       const upload = makeCpuUpload(Number(countSelect.value));
       backend.reset(upload);
       backend.render();
+      resetMetrics();
       setStatus(`WebGPU ${running ? 'active' : 'paused'} · CPU state uploaded exactly · ${upload.count.toLocaleString()} particles`);
     }
 

@@ -719,6 +719,15 @@ export class WebGpuParticleLifeBackend {
     return count;
   }
 
+  /** Wait for work already submitted to the GPU. Use for diagnostics, never each frame. */
+  async waitForIdle() {
+    this._assertDeviceReady();
+    if (!this.device.queue.onSubmittedWorkDone) return null;
+    const started = performance.now();
+    await this.device.queue.onSubmittedWorkDone();
+    return performance.now() - started;
+  }
+
   /** Render all particles directly from the active GPU state. */
   render() {
     this._assertDeviceReady();
