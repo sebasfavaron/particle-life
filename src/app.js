@@ -43,11 +43,11 @@ addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); })
 document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
-const DEFAULT_WORLD_SCALE = 1.69;
+const DEFAULT_WORLD_SCALE = 1;
 const box = canvas.getBoundingClientRect();
 const initialWidth = Math.round(box.width) || 1200, initialHeight = Math.round(box.height) || 800;
 const sim = new ParticleLife({ width: initialWidth * DEFAULT_WORLD_SCALE, height: initialHeight * DEFAULT_WORLD_SCALE });
-let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
+let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 10, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
@@ -167,6 +167,7 @@ radiusControl.addEventListener('pointerdown', () => { showRadiusPreview = true; 
 for (const event of ['pointerup', 'pointercancel']) addEventListener(event, () => { showRadiusPreview = false; });
 radiusControl.addEventListener('blur', () => { showRadiusPreview = false; });
 $('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
+/* Nudge parameters: can cause crashes, investigate later.
 $('nudge').onclick=()=>{
   const steps = { count: 1000, radius: 2, damping: 0.02, force: 0.005, dt: 0.1 };
   for(const [k,step] of Object.entries(steps)){
@@ -186,6 +187,7 @@ $('nudge').onclick=()=>{
   }
   scheduleURL();
 };
+*/
 $('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0; scheduleURL();});
 // update URL bar to reflect current preset
 function updateURL() {

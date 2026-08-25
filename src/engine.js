@@ -4,11 +4,11 @@ export class ParticleLife {
   constructor(options = {}) {
     this.width = options.width ?? 1200;
     this.height = options.height ?? 800;
-    this.count = options.count ?? 4000;
-    this.types = options.types ?? 6;
-    this.radius = options.radius ?? 28;
-    this.force = options.force ?? 0.045;
-    this.damping = options.damping ?? 0.80;
+    this.count = options.count ?? 2000;
+    this.types = options.types ?? 10;
+    this.radius = options.radius ?? 80;
+    this.force = options.force ?? 0.02;
+    this.damping = options.damping ?? 0.70;
     this.dt = options.dt ?? 1;
     this.wrap = options.wrap ?? true;
     this.seed = String(options.seed ?? 'clusters');
@@ -41,7 +41,7 @@ export class ParticleLife {
     const rebuildMatrix = next.types !== undefined && next.types !== this.types;
     Object.assign(this, next);
     if (rebuildMatrix) {
-      this.types = Math.max(1, Math.min(12, Math.round(this.types)));
+      this.types = Math.max(1, Math.min(40, Math.round(this.types)));
       this.matrix = new Float32Array(this.types * this.types);
       this.randomizeMatrix(this.seed);
       const newMasses = new Float32Array(this.types);
@@ -175,7 +175,7 @@ export class ParticleLife {
   importPreset(data) {
     if (!data || !Array.isArray(data.matrix) || !data.matrix.length) throw new Error('Invalid preset matrix');
     const types = data.matrix.length;
-    if (types < 1 || types > 12 || data.matrix.some(row => !Array.isArray(row) || row.length !== types)) throw new Error('Matrix must be square (1–12)');
+    if (types < 1 || types > 40 || data.matrix.some(row => !Array.isArray(row) || row.length !== types)) throw new Error('Matrix must be square (1–12)');
     this.types = types; this.count = Math.max(100, Math.min(50000, Number(data.particleCount ?? this.count)));
     this.radius = Number(data.interactionRadius ?? this.radius); this.damping = Number(data.damping ?? this.damping);
     this.force = Number(data.force ?? this.force); this.dt = Number(data.dt ?? this.dt); this.wrap = Boolean(data.wrap ?? this.wrap);

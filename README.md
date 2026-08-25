@@ -22,7 +22,7 @@ No install or bundle step. You can also use `python3 -m http.server 4173`.
 
 - Edit any matrix cell live. **Row particles feel column particles**.
 - `+1`: strong attraction. `0`: neutral. `-1`: strong repulsion.
-- Change color classes (2–10), particles (1k–30k), radius, damping, force, `dt`, and edge wrap.
+- Change color classes (2–40), particles (1k–30k), radius (10–360), damping, force, `dt`, and edge wrap.
 - Set a seed, then **Randomize matrix**. The same seed and class count produce the same matrix.
 - **Download JSON** saves every important parameter. **Load JSON** restores it.
 - `Space` pauses. `R` randomizes.
@@ -41,7 +41,7 @@ The engine is not an `O(n²)` all-pairs loop. Each frame it:
 
 Grid cell size equals interaction radius. Expected work is `O(n + local pairs)` for
 roughly uniform density. Rendering batches one canvas path per color. The default is
-**10,000 particles**.
+**2,000 particles across 10 color classes**.
 
 ```bash
 npm test
@@ -57,8 +57,8 @@ upper-left HUD and is available as `window.__particleLifeMetrics`.
 - [`presets/coral-garden.json`](presets/coral-garden.json): asymmetric pursuit loops and strong same-color clusters.
 - Any live state can become a preset through **Download JSON**.
 
-Good exploration ranges: radius 20–35, damping 0.78–0.9, force 0.03–0.07. Reduce
-radius before raising particle count because neighbor density grows with radius².
+Default exploration starts with radius 80, damping 0.70, force 0.02, and speed 10.
+Reduce radius before raising particle count because neighbor density grows with radius².
 
 ## Source selection
 
