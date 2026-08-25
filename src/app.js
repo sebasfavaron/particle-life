@@ -58,8 +58,10 @@ function resize() {
   ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
   sim.resize(baseW * worldScale, baseH * worldScale);
 }
+function syncZoomLabel() { $('zoomLabel').textContent = `Zoom ×${worldScale.toFixed(2)}`; }
 function setWorldScale(s, { persist = true } = {}) {
   worldScale = Math.max(0.25, Math.min(5, s));
+  syncZoomLabel();
   const dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
   const renderScale = dpr / worldScale;
@@ -334,6 +336,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 resize(); // sync pre-resize — ensures fill covers canvas
+syncZoomLabel();
 window.particleLife=sim;
 // auto-reset speed to 1 when tab becomes visible again
 addEventListener('visibilitychange', ()=>{
