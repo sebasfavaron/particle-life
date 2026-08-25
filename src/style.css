@@ -1,6 +1,6 @@
 * { box-sizing: border-box; }
 html, body {
-  --ui: .64;
+  --ui: 1;
   margin: 0;
   height: 100%;
   overflow: hidden;

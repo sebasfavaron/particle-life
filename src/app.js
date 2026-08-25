@@ -43,9 +43,11 @@ addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); })
 document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
+const DEFAULT_WORLD_SCALE = 1.69;
 const box = canvas.getBoundingClientRect();
-const sim = new ParticleLife({ width: Math.round(box.width) || 1200, height: Math.round(box.height) || 800 });
-let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false, worldScale = 1, baseW = 1200, baseH = 800;
+const initialWidth = Math.round(box.width) || 1200, initialHeight = Math.round(box.height) || 800;
+const sim = new ParticleLife({ width: initialWidth * DEFAULT_WORLD_SCALE, height: initialHeight * DEFAULT_WORLD_SCALE });
+let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 1, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
@@ -208,8 +210,8 @@ function stepWorldScale(direction) {
     : [...WORLD_SCALE_STEPS].reverse().find(value => value < worldScale - 0.001) ?? WORLD_SCALE_STEPS[0];
   setWorldScale(next);
 }
-$('zoomIn').onclick=()=>stepWorldScale(-1);
-$('zoomOut').onclick=()=>stepWorldScale(1);
+$('zoomIn').onclick=()=>stepWorldScale(1);
+$('zoomOut').onclick=()=>stepWorldScale(-1);
 $('share').onclick=()=>{
   updateURL();
   const url = location.href;
@@ -373,9 +375,9 @@ function loadSearchPreset(){
   if(raw) try {
     const data = JSON.parse(raw);
     console.log('Preset loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+(data.matrix?data.matrix.length+'x'+data.matrix[0].length:'BAD'));
+    if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
     sim.importPreset(data);
     if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
-    if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
     if(typeof data.showForces === 'boolean') showForces = data.showForces;
   } catch(e){ console.warn('Invalid preset URL', e); }
   syncControls();
