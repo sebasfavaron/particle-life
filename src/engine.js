@@ -12,6 +12,7 @@ export class ParticleLife {
     this.dt = options.dt ?? 1;
     this.wrap = options.wrap ?? true;
     this.seed = String(options.seed ?? 'clusters');
+    this.cellScale = options.cellScale === 0.5 || options.cellScale === 1 ? options.cellScale : null;
     this.beta = 0.3;
     this.matrix = new Float32Array(this.types * this.types);
     this.masses = new Float32Array(this.types);
@@ -97,7 +98,13 @@ export class ParticleLife {
   }
 
   rebuildGridStorage() {
-    this.cellSize = Math.max(1, this.radius);
+    const fullCellSize = Math.max(1, this.radius);
+    const fullCols = Math.max(1, Math.ceil(this.width / fullCellSize));
+    const fullRows = Math.max(1, Math.ceil(this.height / fullCellSize));
+    const fullCellDensity = this.count / (fullCols * fullRows);
+    this.gridScale = this.cellScale ?? (fullCellDensity >= 4 ? 0.5 : 1);
+    this.cellSize = fullCellSize * this.gridScale;
+    this.neighborRange = Math.ceil(this.radius / this.cellSize);
     this.cols = Math.max(1, Math.ceil(this.width / this.cellSize));
     this.rows = Math.max(1, Math.ceil(this.height / this.cellSize));
     this.head = new Int32Array(this.cols * this.rows);
@@ -129,10 +136,10 @@ export class ParticleLife {
     for (let cell = 0; cell < head.length; cell++) {
       if (head[cell] === -1) continue;
       const baseX = cell % cols, baseY = Math.floor(cell / cols), stamp = cell + 1;
-      for (let oy = -1; oy <= 1; oy++) {
+      for (let oy = -this.neighborRange; oy <= this.neighborRange; oy++) {
         let cy = baseY + oy;
         if (wrap) cy = (cy + rows) % rows; else if (cy < 0 || cy >= rows) continue;
-        for (let ox = -1; ox <= 1; ox++) {
+        for (let ox = -this.neighborRange; ox <= this.neighborRange; ox++) {
           let cx = baseX + ox;
           if (wrap) cx = (cx + cols) % cols; else if (cx < 0 || cx >= cols) continue;
           const neighbor = cy * cols + cx;

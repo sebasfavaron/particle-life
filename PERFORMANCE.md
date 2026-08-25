@@ -5,6 +5,7 @@
 | Propuesta | Estado | Alcance | Validación / medición |
 | --- | --- | --- | --- |
 | 1. Procesar cada par una sola vez | Implementado | Half-stencil exacto. Cada par espacial calcula geometría una vez y acumula ambas fuerzas direccionales antes de integrar. | `npm test`: equivalencia con all-pairs en wrap y grillas de 1–2 celdas. Benchmark CPU: 2.000 partículas, 1280×720, radio 80, 10 tipos; mediana de 5×60 ticks tras warm-up: 3,85 ms → 2,71 ms por tick (1,42×; 29,6% menos). No mide FPS de navegador. |
+| 2. Ajustar celda y stencil según el radio | Implementado | Usa `R/2` cuando la densidad estimada de una celda `R` es ≥4 partículas; si no, usa `R`. El rango de vecinos deriva del tamaño de celda y conserva todos los pares. | `npm test`: equivalencia all-pairs con `R`, `R/2`, wrap, no-wrap y grillas de 1–2 celdas. Benchmark CPU, 2.000 partículas, 1280×720, 10 tipos, mediana de 5×60 ticks tras warm-up: radio 24: `R` 0,553 ms vs `R/2` 0,917 ms (auto=`R`); radio 80: `R` 2,663 ms vs `R/2` 2,505 ms (auto=`R/2`, 5,9% menos). No mide FPS de navegador ni escalas mayores. |
 
 Una grilla espacial no garantiza escalabilidad lineal si aumentás la cantidad de partículas dentro del mismo espacio y mantenés constante el radio de interacción.
 
