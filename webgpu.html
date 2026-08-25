@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Particle Life WebGPU validation</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #080b10; color: #e9eef7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
+    main { width: min(1200px, 100vw); padding: 12px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    h1 { margin: 0 auto 0 0; font-size: 1rem; }
+    button, select { min-height: 34px; border: 1px solid #41506a; border-radius: 6px; background: #172033; color: inherit; padding: 0 12px; }
+    button:disabled, select:disabled { opacity: .5; }
+    label { display: flex; align-items: center; gap: 6px; color: #b9c6d9; font-size: .85rem; }
+    #status { width: 100%; color: #aebcd0; font: 12px/1.4 ui-monospace, monospace; }
+    #status[data-state="ready"] { color: #72e0b5; }
+    #status[data-state="error"] { color: #ff9b9b; }
+    canvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; background: #000; border: 1px solid #263249; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>WebGPU validation</h1>
+      <button id="run" type="button" disabled>Start</button>
+      <button id="reset" type="button" disabled>Reset</button>
+      <label>Particles
+        <select id="count" disabled>
+          <option value="2000">2k</option>
+          <option value="10000">10k</option>
+        </select>
+      </label>
+      <div id="status" data-state="loading" role="status" aria-live="polite">Initializing CPU state, then requesting WebGPU…</div>
+    </header>
+    <canvas id="world" width="1200" height="800" aria-label="Particle Life WebGPU canvas"></canvas>
+  </main>
+
+  <script type="module">
+    import { ParticleLife } from './src/engine.js';
+    import {
+      WebGpuParticleLifeBackend,
+      WebGpuAvailabilityError,
+    } from './src/webgpu/webgpu-backend.js';
+
+    const WORLD_WIDTH = 1200;
+    const WORLD_HEIGHT = 800;
+    const TICK_HZ = 30;
+    const canvas = document.querySelector('#world');
+    const runButton = document.querySelector('#run');
+    const resetButton = document.querySelector('#reset');
+    const countSelect = document.querySelector('#count');
+    const status = document.querySelector('#status');
+
+    let backend = null;
+    let timer = null;
+    let running = false;
+
+    function setStatus(message, state = 'ready') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function makeCpuUpload(particleCount) {
+      // The CPU engine remains the single source of the initialized validation state.
+      const engine = new ParticleLife({
+        width: WORLD_WIDTH,
+        height: WORLD_HEIGHT,
+        count: particleCount,
+      });
+      const { x, y, vx, vy, kind, matrix, masses, drawOrder } = engine;
+      const states = new Float32Array(particleCount * 4);
+      for (let i = 0; i < particleCount; i += 1) {
+        states[i * 4] = x[i];
+        states[i * 4 + 1] = y[i];
+        states[i * 4 + 2] = vx[i];
+        states[i * 4 + 3] = vy[i];
+      }
+
+      return {
+        width: engine.width,
+        height: engine.height,
+        count: engine.count,
+        types: engine.types,
+        radius: engine.radius,
+        force: engine.force,
+        damping: engine.damping,
+        dt: engine.dt,
+        beta: engine.beta,
+        wrap: engine.wrap,
+        states,
+        kinds: Uint32Array.from(kind),
+        matrix,
+        masses,
+        drawOrder,
+      };
+    }
+
+    function stop() {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+      running = false;
+      runButton.textContent = 'Start';
+    }
+
+    function failDuringRun(error) {
+      stop();
+      runButton.disabled = true;
+      resetButton.disabled = true;
+      countSelect.disabled = true;
+      setStatus(`WebGPU error — simulation stopped: ${error.message}`, 'error');
+    }
+
+    function start() {
+      if (!backend || running) return;
+      running = true;
+      runButton.textContent = 'Pause';
+      setStatus(`WebGPU active · ${countSelect.selectedOptions[0].textContent} particles · fixed ${TICK_HZ} Hz`);
+      timer = window.setInterval(() => {
+        try {
+          backend.stepMany(1);
+          backend.render();
+        } catch (error) {
+          failDuringRun(error);
+        }
+      }, 1000 / TICK_HZ);
+    }
+
+    function resetFromCpu() {
+      if (!backend) return;
+      const upload = makeCpuUpload(Number(countSelect.value));
+      backend.reset(upload);
+      backend.render();
+      setStatus(`WebGPU ${running ? 'active' : 'paused'} · CPU state uploaded exactly · ${upload.count.toLocaleString()} particles`);
+    }
+
+    runButton.addEventListener('click', () => {
+      if (running) {
+        stop();
+        setStatus('WebGPU paused');
+      } else {
+        start();
+      }
+    });
+    resetButton.addEventListener('click', resetFromCpu);
+    countSelect.addEventListener('change', resetFromCpu);
+
+    async function initialize() {
+      const upload = makeCpuUpload(Number(countSelect.value));
+      try {
+        backend = await WebGpuParticleLifeBackend.create(canvas, {
+          ...upload,
+          reset: upload,
+          onDeviceLost(metadata) {
+            stop();
+            runButton.disabled = true;
+            resetButton.disabled = true;
+            countSelect.disabled = true;
+            setStatus(`CPU fallback / device unavailable — simulation stopped (${metadata.lossReason})`, 'error');
+          },
+        });
+        runButton.disabled = false;
+        resetButton.disabled = false;
+        countSelect.disabled = false;
+        backend.render();
+        start();
+      } catch (error) {
+        stop();
+        const code = error instanceof WebGpuAvailabilityError ? error.code : '';
+        const unavailable = code === 'adapter-unavailable'
+          || code === 'adapter-request-failed'
+          || code === 'device-unavailable'
+          || code === 'device-request-failed'
+          || code === 'api-unavailable'
+          || code === 'api-incomplete';
+        if (unavailable) {
+          setStatus(`CPU fallback / adapter unavailable — simulation not running (${code})`, 'error');
+        } else {
+          setStatus(`WebGPU initialization failed — simulation not running: ${error.message}`, 'error');
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      stop();
+      backend?.destroy();
+    });
+
+    initialize();
+  </script>
+</body>
+</html>
