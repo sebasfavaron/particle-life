@@ -135,6 +135,10 @@ function randomize() {
   sim.randomizeMatrix(newSeed);
   buildMatrix();
 }
+const matrixHelpDialog = $('matrixHelpDialog');
+$('matrixHelp').onclick = () => matrixHelpDialog.showModal();
+$('matrixHelpClose').onclick = () => matrixHelpDialog.close();
+matrixHelpDialog.addEventListener('click', event => { if(event.target === matrixHelpDialog) matrixHelpDialog.close(); });
 $('randomize').onclick=()=>{ randomize(); scheduleURL(); };
 $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
