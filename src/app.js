@@ -146,11 +146,6 @@ $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
   buildMatrix(); scheduleURL();
 };
-$('rndall').onclick=()=>{
-  randomize();
-  for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
-  buildMatrix(); scheduleURL();
-};
 $('reset').onclick=()=>{ sim.resetParticles($('seed').value); scheduleURL(); };
 $('pause').onclick=()=>{running=!running;$('pause').textContent=running?'Pause':'Resume';};
 $('seed').addEventListener('change',()=>{sim.seed=$('seed').value; scheduleURL();});
@@ -161,11 +156,15 @@ $('types').addEventListener('change',()=>{sim.configure({types:Number($('types')
 for (const id of ['radius','damping','force','dt']) $(id).addEventListener('input',()=>{
   const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); scheduleURL();
 });
-let showRadiusPreview = false;
-const radiusControl = $('radius');
+let showRadiusPreview = false, forceSliderHovered = false, forceSliderHeld = false;
+const radiusControl = $('radius'), forceControl = $('force');
 radiusControl.addEventListener('pointerdown', () => { showRadiusPreview = true; });
-for (const event of ['pointerup', 'pointercancel']) addEventListener(event, () => { showRadiusPreview = false; });
+for (const event of ['pointerup', 'pointercancel']) addEventListener(event, () => { showRadiusPreview = false; forceSliderHeld = false; syncForcesButton(); });
 radiusControl.addEventListener('blur', () => { showRadiusPreview = false; });
+forceControl.addEventListener('pointerenter', () => { forceSliderHovered = true; syncForcesButton(); });
+forceControl.addEventListener('pointerleave', () => { forceSliderHovered = false; syncForcesButton(); });
+forceControl.addEventListener('pointerdown', () => { forceSliderHeld = true; syncForcesButton(); });
+forceControl.addEventListener('blur', () => { forceSliderHeld = false; syncForcesButton(); });
 $('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
 /* Nudge parameters: can cause crashes, investigate later.
 $('nudge').onclick=()=>{
@@ -241,7 +240,8 @@ $('share').onclick=()=>{
 };
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
-function syncForcesButton() { $('forces').className = showForces ? 'active' : 'secondary'; }
+function previewingForces() { return forceSliderHovered || forceSliderHeld; }
+function syncForcesButton() { $('forces').className = showForces || previewingForces() ? 'active' : 'secondary'; }
 $('forces').onclick=()=>{ showForces=!showForces; syncForcesButton(); scheduleURL(); };
 $('scan').onclick=()=>{
   const n = prompt('Steps to simulate (no render):', '10000');
@@ -298,8 +298,8 @@ function draw() {
     ctx.fill();
   }
   if(showRadiusPreview) drawRadiusPreview();
-  if(showForces) {
-    const scale=8, maxArrows=2000;
+  if(showForces || previewingForces()) {
+    const scale = 8 * (1 + 0.2 * (worldScale - 1)), maxArrows = showForces ? 2000 : 500;
     let drawn=0;
     for(let t=0;t<sim.types;t++) {
       ctx.strokeStyle=palette[t%palette.length]+'bb'; ctx.lineWidth=1.8; ctx.beginPath();
