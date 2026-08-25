@@ -201,8 +201,15 @@ function updateURL() {
 let urlDirty = false;
 function scheduleURL() { if(!urlDirty){ urlDirty=true; requestAnimationFrame(()=>{ urlDirty=false; updateURL(); }); } }
 
-$('zoomIn').onclick=()=>setWorldScale(worldScale/1.3);
-$('zoomOut').onclick=()=>setWorldScale(worldScale*1.3);
+const WORLD_SCALE_STEPS = [0.25, 0.33, 0.42, 0.55, 0.71, 1, 1.3, 1.69, 2.2, 2.86, 3.71, 5];
+function stepWorldScale(direction) {
+  const next = direction > 0
+    ? WORLD_SCALE_STEPS.find(value => value > worldScale + 0.001) ?? WORLD_SCALE_STEPS.at(-1)
+    : [...WORLD_SCALE_STEPS].reverse().find(value => value < worldScale - 0.001) ?? WORLD_SCALE_STEPS[0];
+  setWorldScale(next);
+}
+$('zoomIn').onclick=()=>stepWorldScale(-1);
+$('zoomOut').onclick=()=>stepWorldScale(1);
 $('share').onclick=()=>{
   updateURL();
   const url = location.href;
