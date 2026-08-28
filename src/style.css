@@ -51,6 +51,15 @@ button:hover { border-color: #6d84a8; }
 .section-title h2 { display: flex; align-items: center; gap: calc(5px * var(--ui)); }
 .help-button { width: calc(15px * var(--ui)); height: calc(15px * var(--ui)); padding: 0; border-radius: 50%; color: #9db0ca; font-size: calc(10px * var(--ui)); line-height: 1; }
 .section-title span, .legend, footer { font-size: calc(11px * var(--ui)); color: #718199; }
+.saved-configurations { margin-bottom: calc(17px * var(--ui)); }
+.save-row { display: flex; gap: calc(7px * var(--ui)); }
+.save-row input { min-width: 0; flex: 1; color: #fff; background: #080b11; border: 1px solid #35435b; padding: calc(7px * var(--ui)); }
+#savedPresetStatus { margin: calc(7px * var(--ui)) 0 0; color: #9db0ca; font-size: calc(11px * var(--ui)); }
+#savedPresetStatus.error { color: #ff8fa3; }
+#savedPresets { display: grid; gap: calc(6px * var(--ui)); margin-top: calc(7px * var(--ui)); }
+.saved-preset { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: calc(6px * var(--ui)); padding: calc(7px * var(--ui)); background: #080b11; border: 1px solid #26334b; border-radius: calc(5px * var(--ui)); }
+.saved-preset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dce7f8; }
+.saved-preset-delete { color: #ff9aae; }
 #matrixHelpDialog { width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; color: #ecf2ff; background: #0c1018; border: 1px solid #40506a; border-radius: 8px; box-shadow: 0 12px 40px #000a; }
 #matrixHelpDialog::backdrop { background: #000a; }
 .tutorial-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }.tutorial-header h2 { font-size: 16px; }.modal-close { width: 26px; height: 26px; padding: 0; font-size: 18px; line-height: 1; }

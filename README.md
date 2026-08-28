@@ -57,7 +57,7 @@ upper-left HUD and is available as `window.__particleLifeMetrics`.
 - [`presets/coral-garden.json`](presets/coral-garden.json): asymmetric pursuit loops and strong same-color clusters.
 - Any live state can become a preset through **Download JSON**.
 
-Default exploration starts with radius 80, damping 0.70, force 0.02, and speed 10.
+Default exploration starts with radius 80, damping 0.82, force 0.025, `dt` 1, and speed 4.
 Reduce radius before raising particle count because neighbor density grows with radius².
 
 ## Source selection

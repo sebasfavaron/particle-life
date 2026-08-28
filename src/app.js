@@ -1,4 +1,5 @@
 import { ParticleLife } from './engine.js';
+import { SavedPresetStore } from './saved-presets.js';
 import { createWebGpuMainAdapter } from './webgpu/main-adapter.js';
 
 const $ = id => document.getElementById(id);
@@ -50,7 +51,11 @@ const DEFAULT_WORLD_SCALE = 1;
 const box = canvas.getBoundingClientRect();
 const initialWidth = Math.round(box.width) || 1200, initialHeight = Math.round(box.height) || 800;
 const sim = new ParticleLife({ width: initialWidth * DEFAULT_WORLD_SCALE, height: initialHeight * DEFAULT_WORLD_SCALE });
-let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 10, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
+const savedPresetStore = new SavedPresetStore({
+  getItem(key) { return localStorage.getItem(key); },
+  setItem(key, value) { localStorage.setItem(key, value); },
+});
+let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 4, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
 let gpu = null, gpuActive = false, gpuStarting = false, gpuFramePending = false;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
@@ -252,15 +257,18 @@ $('nudge').onclick=()=>{
 };
 */
 $('speed').addEventListener('input',()=>{stepsPerFrame=Number($('speed').value);$('speedOut').textContent=stepsPerFrame;stepTimeEstimate=0; scheduleURL();});
-// update URL bar to reflect current preset
-function updateURL() {
+function exportCurrentPreset() {
   const d = sim.exportPreset();
   d._name = document.title.replace(' - Particle Life Lab','') || d.seed;
   d._author = 'ballbox-first';
   d.speed = stepsPerFrame;
   d.zoom = worldScale;
   d.showForces = showForces;
-  const json = JSON.stringify(d);
+  return d;
+}
+// update URL bar to reflect current preset
+function updateURL() {
+  const json = JSON.stringify(exportCurrentPreset());
   const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
   history.replaceState(null, '', url);
 }
@@ -302,6 +310,47 @@ $('share').onclick=()=>{
     document.body.removeChild(ta);
   }
 };
+function setSavedPresetStatus(message = '', error = false) {
+  const status = $('savedPresetStatus');
+  status.textContent = message;
+  status.hidden = !message;
+  status.className = error ? 'error' : '';
+}
+function renderSavedPresets() {
+  const result = savedPresetStore.list();
+  const box = $('savedPresets');
+  box.replaceChildren();
+  if (result.error) setSavedPresetStatus(result.error, true);
+  for (const entry of result.entries) {
+    const row = document.createElement('div'); row.className = 'saved-preset';
+    const name = document.createElement('span'); name.className = 'saved-preset-name'; name.textContent = entry.name; name.title = entry.name;
+    const start = document.createElement('button'); start.textContent = 'Start';
+    start.onclick = () => {
+      try {
+        applyPreset(entry.preset, { persist: true });
+        setSavedPresetStatus(`Started “${entry.name}”.`);
+      } catch (_) {
+        setSavedPresetStatus(`“${entry.name}” is invalid and was not started.`, true);
+      }
+    };
+    const remove = document.createElement('button'); remove.className = 'saved-preset-delete'; remove.textContent = 'Delete';
+    remove.onclick = () => {
+      const outcome = savedPresetStore.remove(entry.id);
+      if (outcome.error) setSavedPresetStatus(outcome.error, true);
+      else if (outcome.removed) { setSavedPresetStatus(`Deleted “${entry.name}”.`); renderSavedPresets(); }
+    };
+    row.append(name, start, remove); box.append(row);
+  }
+}
+$('savePreset').onclick = () => {
+  const name = $('savePresetName');
+  const outcome = savedPresetStore.save(exportCurrentPreset(), name.value);
+  if (outcome.error) { setSavedPresetStatus(outcome.error, true); return; }
+  name.value = '';
+  setSavedPresetStatus(`Saved “${outcome.entry.name}”.`);
+  renderSavedPresets();
+};
+renderSavedPresets();
 addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(event.code==='Space'){$('pause').click();event.preventDefault();}if(event.key.toLowerCase()==='r')randomize();});
 
 function previewingForces() { return forceSliderHovered || forceSliderHeld; }
@@ -479,6 +528,20 @@ addEventListener('visibilitychange', ()=>{
   else { stopBackgroundSteps(); stepTimeEstimate = 0; }
 });
 if(document.hidden) startBackgroundSteps();
+function applyPreset(data, { persist = false } = {}) {
+  if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
+  sim.importPreset(data);
+  if(Number.isFinite(Number(data.speed))) {
+    stepsPerFrame = Number(data.speed);
+    $('speed').value = stepsPerFrame;
+    $('speedOut').textContent = String(stepsPerFrame);
+  }
+  if(typeof data.showForces === 'boolean') showForces = data.showForces;
+  syncControls();
+  syncForcesButton();
+  resetGpuFromCpu();
+  if(persist) scheduleURL();
+}
 function loadSearchPreset(){
   const q = new URLSearchParams(location.search);
   const raw = q.get('preset');
@@ -486,10 +549,8 @@ function loadSearchPreset(){
   if(raw) try {
     const data = JSON.parse(raw);
     console.log('Preset loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+(data.matrix?data.matrix.length+'x'+data.matrix[0].length:'BAD'));
-    if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
-    sim.importPreset(data);
-    if(data.speed){ stepsPerFrame=data.speed; $('speed').value=data.speed; $('speedOut').textContent=String(data.speed); }
-    if(typeof data.showForces === 'boolean') showForces = data.showForces;
+    applyPreset(data);
+    return;
   } catch(e){ console.warn('Invalid preset URL', e); }
   syncControls();
   syncForcesButton();

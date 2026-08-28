@@ -4,11 +4,11 @@ export class ParticleLife {
   constructor(options = {}) {
     this.width = options.width ?? 1200;
     this.height = options.height ?? 800;
-    this.count = options.count ?? 2000;
-    this.types = options.types ?? 10;
+    this.count = options.count ?? 5000;
+    this.types = options.types ?? 40;
     this.radius = options.radius ?? 80;
-    this.force = options.force ?? 0.02;
-    this.damping = options.damping ?? 0.70;
+    this.force = options.force ?? 0.025;
+    this.damping = options.damping ?? 0.82;
     this.dt = options.dt ?? 1;
     this.wrap = options.wrap ?? true;
     this.seed = String(options.seed ?? 'clusters');
