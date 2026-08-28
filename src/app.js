@@ -1,6 +1,7 @@
 import { ParticleLife } from './engine.js';
 import { decodeShareUrl, encodeShareUrl } from './share-url.js';
 import { SavedPresetStore } from './saved-presets.js';
+import { formatStepCount } from './step-counter.js';
 import { createWebGpuMainAdapter } from './webgpu/main-adapter.js';
 
 const $ = id => document.getElementById(id);
@@ -46,7 +47,7 @@ addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); })
 document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 const stage = document.querySelector('main');
 const canvas = $('world'), gpuCanvas = $('worldGpu'), ctx = canvas.getContext('2d', { alpha: false });
-const gpuButton = $('gpu'), backendHud = $('backend');
+const gpuButton = $('gpu'), backendHud = $('backend'), stepCountHud = $('stepCount');
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const DEFAULT_WORLD_SCALE = 1;
 const box = canvas.getBoundingClientRect();
@@ -58,6 +59,10 @@ const savedPresetStore = new SavedPresetStore({
 });
 let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 4, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
 let gpu = null, gpuActive = false, gpuStarting = false, gpuFramePending = false;
+let deliveredSteps = 0;
+function renderStepCount() { stepCountHud.textContent = `Steps ${formatStepCount(deliveredSteps)}`; }
+function recordSteps(count) { deliveredSteps += Math.max(0, Math.floor(count)); renderStepCount(); }
+function resetStepCount() { deliveredSteps = 0; renderStepCount(); }
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
@@ -90,7 +95,7 @@ function fallbackToCpu(reason) {
   gpu = null; gpuActive = false; gpuStarting = false; gpuFramePending = false;
   try { failed?.destroy(); } catch (_) { /* Device may already be lost. */ }
   gpuCanvas.hidden = true; canvas.hidden = false;
-  sim.resetParticles(sim.seed);
+  sim.resetParticles(sim.seed); resetStepCount();
   gpuButton.disabled = true; gpuButton.textContent = 'GPU unavailable';
   gpuButton.title = reason;
   setBackendStatus(`CPU fallback · ${reason}`);
@@ -216,13 +221,13 @@ $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
   buildMatrix(); syncGpuConfiguration(); scheduleURL();
 };
-$('reset').onclick=()=>{ sim.resetParticles($('seed').value); resetGpuFromCpu(); scheduleURL(); };
+$('reset').onclick=()=>{ sim.resetParticles($('seed').value); resetStepCount(); resetGpuFromCpu(); scheduleURL(); };
 $('pause').onclick=()=>{running=!running;$('pause').textContent=running?'Pause':'Resume';};
 $('seed').addEventListener('change',()=>{sim.seed=$('seed').value; scheduleURL();});
 $('count').addEventListener('input',()=>$('countOut').textContent=$('count').value);
-$('count').addEventListener('change',()=>{sim.configure({count:Number($('count').value)}); resetGpuFromCpu(); scheduleURL();});
+$('count').addEventListener('change',()=>{const count=Number($('count').value), resets=count!==sim.count; sim.configure({count}); if(resets) resetStepCount(); resetGpuFromCpu(); scheduleURL();});
 $('types').addEventListener('input',()=>$('typesOut').textContent=$('types').value);
-$('types').addEventListener('change',()=>{sim.configure({types:Number($('types').value)});buildMatrix(); resetGpuFromCpu(); scheduleURL();});
+$('types').addEventListener('change',()=>{const types=Number($('types').value), resets=types!==sim.types; sim.configure({types}); if(resets) resetStepCount(); buildMatrix(); resetGpuFromCpu(); scheduleURL();});
 for (const id of ['radius','damping','force','dt']) $(id).addEventListener('input',()=>{
   const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); syncGpuConfiguration(); scheduleURL();
 });
@@ -377,7 +382,7 @@ $('scan').onclick=()=>{
     try {
       gpu.stepMany(count);
       await gpu.waitForIdle(); // scan is explicit throughput work; do not queue an unbounded GPU backlog.
-      done += count;
+      done += count; recordSteps(count);
     } catch (error) {
       fallbackToCpu(`GPU scan failed: ${error.message}`); finish(); return;
     }
@@ -387,8 +392,9 @@ $('scan').onclick=()=>{
     } else finish();
   }
   function cpuBatch() {
-    const end = Math.min(done + chunk, total);
+    const start = done, end = Math.min(done + chunk, total);
     for(; done < end; done++) sim.step();
+    recordSteps(done - start);
     if(done < total) {
       $('fps').textContent=`Scan ${(done/total*100).toFixed(0)}%`;
       requestAnimationFrame(cpuBatch);
@@ -451,7 +457,7 @@ function queueGpuStep(count, { render = !document.hidden } = {}) {
     gpu.stepMany(count);
     if(render) gpu.render();
     gpuFramePending = true;
-    gpu.waitForIdle().then(() => { gpuFramePending = false; }, error => {
+    gpu.waitForIdle().then(() => { gpuFramePending = false; recordSteps(count); }, error => {
       gpuFramePending = false;
       fallbackToCpu(`GPU step failed: ${error.message}`);
     });
@@ -479,6 +485,7 @@ function loop(now) {
         capped = Math.min(budget, 5); // safe first guess
       }
       for(let s=0;s<capped;s++) sim.step();
+      recordSteps(capped);
     }
   }
   if(!document.hidden && !gpuActive) draw();
@@ -514,6 +521,7 @@ function advanceInBackground() {
     sim.step();
     steps++;
   }
+  recordSteps(steps);
 }
 function startBackgroundSteps() {
   if(backgroundStepTimer === null) backgroundStepTimer = setInterval(advanceInBackground, BACKGROUND_STEP_MS);
@@ -529,7 +537,7 @@ addEventListener('visibilitychange', ()=>{
 if(document.hidden) startBackgroundSteps();
 function applyPreset(data, { persist = false } = {}) {
   if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
-  sim.importPreset(data);
+  sim.importPreset(data); resetStepCount();
   if(Number.isFinite(Number(data.speed))) {
     stepsPerFrame = Number(data.speed);
     $('speed').value = stepsPerFrame;
