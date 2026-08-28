@@ -1,4 +1,5 @@
 import { ParticleLife } from './engine.js';
+import { createWebGpuMainAdapter } from './webgpu/main-adapter.js';
 
 const $ = id => document.getElementById(id);
 // One root-level layer avoids the independently scrolling sidebar and its zoomed coordinates.
@@ -41,37 +42,99 @@ document.addEventListener('pointerout', event => {
 addEventListener('resize', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
-const canvas = $('world'), ctx = canvas.getContext('2d', { alpha: false });
+const stage = document.querySelector('main');
+const canvas = $('world'), gpuCanvas = $('worldGpu'), ctx = canvas.getContext('2d', { alpha: false });
+const gpuButton = $('gpu'), backendHud = $('backend');
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const DEFAULT_WORLD_SCALE = 1;
 const box = canvas.getBoundingClientRect();
 const initialWidth = Math.round(box.width) || 1200, initialHeight = Math.round(box.height) || 800;
 const sim = new ParticleLife({ width: initialWidth * DEFAULT_WORLD_SCALE, height: initialHeight * DEFAULT_WORLD_SCALE });
 let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 10, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
+let gpu = null, gpuActive = false, gpuStarting = false, gpuFramePending = false;
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
 
+function currentDpr() { return Math.min(devicePixelRatio || 1, 2); }
 function resize() {
-  const box = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
-  baseW = box.width; baseH = box.height;
+  const box = stage.getBoundingClientRect(), dpr = currentDpr();
+  baseW = Math.max(1, box.width); baseH = Math.max(1, box.height);
   canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
   const renderScale = dpr / worldScale;
   ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
   sim.resize(baseW * worldScale, baseH * worldScale);
+  syncGpuConfiguration();
 }
 function syncZoomLabel() { $('zoomLabel').textContent = `Zoom ×${worldScale.toFixed(2)}`; }
 function setWorldScale(s, { persist = true } = {}) {
   worldScale = Math.max(0.25, Math.min(5, s));
   syncZoomLabel();
-  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const dpr = currentDpr();
   canvas.width = Math.round(baseW * dpr); canvas.height = Math.round(baseH * dpr);
   const renderScale = dpr / worldScale;
   ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
   sim.resize(baseW * worldScale, baseH * worldScale);
+  syncGpuConfiguration();
   if(persist) scheduleURL();
 }
-new ResizeObserver(resize).observe(canvas);
+function setBackendStatus(message) { backendHud.textContent = message; }
+function fallbackToCpu(reason) {
+  const failed = gpu;
+  gpu = null; gpuActive = false; gpuStarting = false; gpuFramePending = false;
+  try { failed?.destroy(); } catch (_) { /* Device may already be lost. */ }
+  gpuCanvas.hidden = true; canvas.hidden = false;
+  sim.resetParticles(sim.seed);
+  gpuButton.disabled = true; gpuButton.textContent = 'GPU unavailable';
+  gpuButton.title = reason;
+  setBackendStatus(`CPU fallback · ${reason}`);
+}
+function syncGpuConfiguration() {
+  if (!gpuActive || !gpu) return;
+  try {
+    gpu.configureFromCpu();
+    gpu.resizeFromCpu({ cssWidth: baseW, cssHeight: baseH, dpr: currentDpr(), worldScale });
+  } catch (error) {
+    fallbackToCpu(`GPU update failed: ${error.message}`);
+  }
+}
+function resetGpuFromCpu() {
+  if (!gpuActive || !gpu) return;
+  try { gpu.resetFromCpu(); gpu.render(); }
+  catch (error) { fallbackToCpu(`GPU reset failed: ${error.message}`); }
+}
+async function startGpu() {
+  if (gpuActive || gpuStarting) return;
+  if (!navigator.gpu || !isSecureContext) {
+    fallbackToCpu('WebGPU needs a secure browser context and adapter');
+    return;
+  }
+  gpuStarting = true; gpuButton.disabled = true; gpuButton.textContent = 'Starting GPU…';
+  setBackendStatus('WebGPU starting…');
+  let candidate = null;
+  try {
+    candidate = await createWebGpuMainAdapter({
+      canvas: gpuCanvas, sim, palette, worldScale, cssWidth: baseW, cssHeight: baseH, dpr: currentDpr(),
+      onDeviceLost(metadata) { fallbackToCpu(`GPU device lost: ${metadata.lossReason}`); },
+      onUncapturedError(error) { console.error('WebGPU error', error); setBackendStatus(`GPU error: ${error.message}`); },
+    });
+    candidate.resetFromCpu();
+    candidate.resizeFromCpu({ cssWidth: baseW, cssHeight: baseH, dpr: currentDpr(), worldScale });
+    gpu = candidate; gpuActive = true; gpuStarting = false;
+    showForces = false; syncForcesButton();
+    gpuCanvas.hidden = false; canvas.hidden = true;
+    gpu.render();
+    gpuButton.textContent = 'GPU active'; gpuButton.disabled = true; gpuButton.title = 'WebGPU is running';
+    setBackendStatus('WebGPU active');
+    window.__particleLifeBackend = gpu.metadata;
+  } catch (error) {
+    try { candidate?.destroy(); } catch (_) { /* Best effort after partial initialization. */ }
+    gpuStarting = false;
+    fallbackToCpu(`WebGPU unavailable: ${error.message}`);
+  }
+}
+gpuButton.onclick = startGpu;
+new ResizeObserver(resize).observe(stage);
 
 function colorFor(value) {
   const a = Math.min(1, Math.abs(value));
@@ -95,7 +158,7 @@ function buildMatrix() {
     for (let c=0;c<n;c++) {
       const input=document.createElement('input'); input.type='number'; input.min='-1'; input.max='1'; input.step='0.05'; input.className='matrix-cell';
       const index=r*n+c, refresh=()=>{ const v=sim.matrix[index]; input.value=v.toFixed(2); input.style.background=colorFor(v); input.title=v.toFixed(2); };
-      input.addEventListener('input',()=>{ const v=Number(input.value); if(Number.isFinite(v)){sim.matrix[index]=Math.max(-1,Math.min(1,v));input.style.background=colorFor(sim.matrix[index]);input.title=v.toFixed(2); scheduleURL();} });
+      input.addEventListener('input',()=>{ const v=Number(input.value); if(Number.isFinite(v)){sim.matrix[index]=Math.max(-1,Math.min(1,v));input.style.background=colorFor(sim.matrix[index]);input.title=v.toFixed(2); syncGpuConfiguration(); scheduleURL();} });
       refresh(); box.append(input);
     }
   }
@@ -118,7 +181,7 @@ function buildMatrix() {
     input.addEventListener('input',()=>{
       const v=Number(input.value);
       if(Number.isFinite(v) && v>=0.1 && v<=5) sim.masses[t]=v;
-      refresh(); scheduleURL();
+      refresh(); syncGpuConfiguration(); scheduleURL();
     });
     refresh(); box.append(input);
   }
@@ -136,6 +199,7 @@ function randomize() {
   sim.seed = newSeed;
   sim.randomizeMatrix(newSeed);
   buildMatrix();
+  syncGpuConfiguration();
 }
 const matrixHelpDialog = $('matrixHelpDialog');
 $('matrixHelp').onclick = () => matrixHelpDialog.showModal();
@@ -144,17 +208,17 @@ matrixHelpDialog.addEventListener('click', event => { if(event.target === matrix
 $('randomize').onclick=()=>{ randomize(); scheduleURL(); };
 $('rndmass').onclick=()=>{
   for(let t=0;t<sim.types;t++) sim.masses[t]=0.5+Math.random()*2.5;
-  buildMatrix(); scheduleURL();
+  buildMatrix(); syncGpuConfiguration(); scheduleURL();
 };
-$('reset').onclick=()=>{ sim.resetParticles($('seed').value); scheduleURL(); };
+$('reset').onclick=()=>{ sim.resetParticles($('seed').value); resetGpuFromCpu(); scheduleURL(); };
 $('pause').onclick=()=>{running=!running;$('pause').textContent=running?'Pause':'Resume';};
 $('seed').addEventListener('change',()=>{sim.seed=$('seed').value; scheduleURL();});
 $('count').addEventListener('input',()=>$('countOut').textContent=$('count').value);
-$('count').addEventListener('change',()=>{sim.configure({count:Number($('count').value)}); scheduleURL();});
+$('count').addEventListener('change',()=>{sim.configure({count:Number($('count').value)}); resetGpuFromCpu(); scheduleURL();});
 $('types').addEventListener('input',()=>$('typesOut').textContent=$('types').value);
-$('types').addEventListener('change',()=>{sim.configure({types:Number($('types').value)});buildMatrix(); scheduleURL();});
+$('types').addEventListener('change',()=>{sim.configure({types:Number($('types').value)});buildMatrix(); resetGpuFromCpu(); scheduleURL();});
 for (const id of ['radius','damping','force','dt']) $(id).addEventListener('input',()=>{
-  const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); scheduleURL();
+  const value=Number($(id).value); $(id+'Out').textContent=value; sim[id]=value; if(id==='radius')sim.rebuildGridStorage(); syncGpuConfiguration(); scheduleURL();
 });
 let showRadiusPreview = false, forceSliderHovered = false, forceSliderHeld = false;
 const radiusControl = $('radius'), forceControl = $('force');
@@ -165,7 +229,7 @@ forceControl.addEventListener('pointerenter', () => { forceSliderHovered = true;
 forceControl.addEventListener('pointerleave', () => { forceSliderHovered = false; syncForcesButton(); });
 forceControl.addEventListener('pointerdown', () => { forceSliderHeld = true; syncForcesButton(); });
 forceControl.addEventListener('blur', () => { forceSliderHeld = false; syncForcesButton(); });
-$('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; scheduleURL(); };
+$('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; syncGpuConfiguration(); scheduleURL(); };
 /* Nudge parameters: can cause crashes, investigate later.
 $('nudge').onclick=()=>{
   const steps = { count: 1000, radius: 2, damping: 0.02, force: 0.005, dt: 0.1 };
@@ -242,31 +306,47 @@ addEventListener('keydown',event=>{if(event.target.matches('input'))return;if(ev
 
 function previewingForces() { return forceSliderHovered || forceSliderHeld; }
 function syncForcesButton() { $('forces').className = showForces || previewingForces() ? 'active' : 'secondary'; }
-$('forces').onclick=()=>{ showForces=!showForces; syncForcesButton(); scheduleURL(); };
+$('forces').onclick=()=>{
+  if(gpuActive) { setBackendStatus('WebGPU active · force arrows need CPU mode'); return; }
+  showForces=!showForces; syncForcesButton(); scheduleURL();
+};
 $('scan').onclick=()=>{
   const n = prompt('Steps to simulate (no render):', '10000');
   const total = parseInt(n);
   if(!Number.isFinite(total) || total<1) return;
   const was = running; running=false; scanning=true;
-  const chunk = 500;
+  const chunk = total > 50000 ? 2000 : 500;
   let done = 0;
   $('pause').textContent='Scanning…';
-  function batch() {
-    let end = Math.min(done + chunk, total);
-    // extend last chunk for heavy scans
-    const batchSize = total > 50000 ? 2000 : chunk;
-    end = Math.min(done + batchSize, total);
+  const finish = () => {
+    scanning=false; running=was;
+    $('pause').textContent=was?'Pause':'Resume';
+    if(gpuActive) gpu?.render(); else draw();
+  };
+  async function gpuBatch() {
+    if(!gpuActive || !gpu) { finish(); return; }
+    const count = Math.min(chunk, total - done);
+    try {
+      gpu.stepMany(count);
+      await gpu.waitForIdle(); // scan is explicit throughput work; do not queue an unbounded GPU backlog.
+      done += count;
+    } catch (error) {
+      fallbackToCpu(`GPU scan failed: ${error.message}`); finish(); return;
+    }
+    if(done < total) {
+      $('fps').textContent=`GPU scan ${(done/total*100).toFixed(0)}%`;
+      requestAnimationFrame(() => { void gpuBatch(); });
+    } else finish();
+  }
+  function cpuBatch() {
+    const end = Math.min(done + chunk, total);
     for(; done < end; done++) sim.step();
     if(done < total) {
       $('fps').textContent=`Scan ${(done/total*100).toFixed(0)}%`;
-      requestAnimationFrame(batch);
-    } else {
-      scanning=false; running=was;
-      $('pause').textContent=was?'Pause':'Resume';
-      draw();
-    }
+      requestAnimationFrame(cpuBatch);
+    } else finish();
   }
-  requestAnimationFrame(batch);
+  if(gpuActive) void gpuBatch(); else requestAnimationFrame(cpuBatch);
 };
 
 function drawRadiusPreview() {
@@ -317,39 +397,59 @@ function draw() {
     }
   }
 }
+function queueGpuStep(count, { render = !document.hidden } = {}) {
+  if(!gpuActive || !gpu || gpuFramePending || count < 1) return false;
+  try {
+    gpu.stepMany(count);
+    if(render) gpu.render();
+    gpuFramePending = true;
+    gpu.waitForIdle().then(() => { gpuFramePending = false; }, error => {
+      gpuFramePending = false;
+      fallbackToCpu(`GPU step failed: ${error.message}`);
+    });
+    return true;
+  } catch(error) {
+    fallbackToCpu(`GPU step failed: ${error.message}`);
+    return false;
+  }
+}
 function loop(now) {
   if(firstFrame){ firstFrame=false; resize(); }
   const start=performance.now();
   if(running && !scanning) {
-    // Background work stays intentionally tiny; the timer below keeps it alive if RAF is throttled.
-    const budget = document.hidden ? 1 : Math.max(1, stepsPerFrame);
-    let capped;
-    if(stepTimeEstimate > 0) {
-      // leave half the frame for draw
-      const room = MAX_FRAME_MS - (performance.now() - start);
-      capped = Math.min(budget, Math.max(1, Math.floor(room / stepTimeEstimate)));
+    if(gpuActive) {
+      queueGpuStep(document.hidden ? 1 : Math.max(1, stepsPerFrame));
     } else {
-      capped = Math.min(budget, 5); // safe first guess
+      // Background work stays intentionally tiny; the timer below keeps it alive if RAF is throttled.
+      const budget = document.hidden ? 1 : Math.max(1, stepsPerFrame);
+      let capped;
+      if(stepTimeEstimate > 0) {
+        // leave half the frame for draw
+        const room = MAX_FRAME_MS - (performance.now() - start);
+        capped = Math.min(budget, Math.max(1, Math.floor(room / stepTimeEstimate)));
+      } else {
+        capped = Math.min(budget, 5); // safe first guess
+      }
+      for(let s=0;s<capped;s++) sim.step();
     }
-    for(let s=0;s<capped;s++) sim.step();
   }
-  if(!document.hidden) draw();
+  if(!document.hidden && !gpuActive) draw();
   const elapsed=performance.now()-start; frames++; frameSum+=elapsed;
   if(!document.hidden && now-sampleAt>=500){
-    const msPerStep = stepTimeEstimate > 0 ? stepTimeEstimate : frameSum/frames/stepsPerFrame;
     const fps=frames*1000/(now-sampleAt);
     $('fps').textContent=`${fps.toFixed(0)} FPS`;
-    $('frame').textContent=`${(frameSum/frames).toFixed(1)} ms`;
+    $('frame').textContent=gpuActive ? `GPU ${gpuFramePending ? 'busy' : 'ready'}` : `${(frameSum/frames).toFixed(1)} ms`;
     $('pairs').textContent=`${sim.count.toLocaleString()} ${stepsPerFrame>1?'· steps='+stepsPerFrame:''}`;
-    window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows]};
+    window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows],backend:gpuActive?'webgpu':'cpu',gpuBusy:gpuFramePending};
     frames=0;frameSum=0;sampleAt=now;
   }
-  // calibrate step time on first few frames
-  if(stepTimeEstimate===0 && running && stepsPerFrame>1) {
+  // Calibrate CPU step time only. GPU queue completion is tracked separately.
+  if(!gpuActive && stepTimeEstimate===0 && running && stepsPerFrame>1) {
     stepTimeEstimate = (performance.now()-start)/Math.max(1,stepsPerFrame);
   }
   requestAnimationFrame(loop);
 }
+
 resize(); // sync pre-resize — ensures fill covers canvas
 syncZoomLabel();
 window.particleLife=sim;
@@ -359,6 +459,7 @@ const BACKGROUND_STEP_MS = 100, BACKGROUND_WORK_BUDGET_MS = 90, BACKGROUND_MAX_S
 let backgroundStepTimer = null;
 function advanceInBackground() {
   if(!document.hidden || !running || scanning) return;
+  if(gpuActive) { queueGpuStep(Math.min(BACKGROUND_MAX_STEPS, Math.max(1, stepsPerFrame)), { render: false }); return; }
   const started = performance.now();
   let steps = 0;
   while(running && !scanning && steps < BACKGROUND_MAX_STEPS && performance.now() - started < BACKGROUND_WORK_BUDGET_MS) {
@@ -392,8 +493,20 @@ function loadSearchPreset(){
   } catch(e){ console.warn('Invalid preset URL', e); }
   syncControls();
   syncForcesButton();
+  resetGpuFromCpu();
+}
+function initializeGpu() {
+  if(!navigator.gpu || !isSecureContext) {
+    gpuButton.disabled = true; gpuButton.textContent = 'GPU unavailable';
+    gpuButton.title = 'WebGPU needs a secure browser context and adapter';
+    setBackendStatus('CPU · WebGPU unavailable');
+    return;
+  }
+  gpuButton.disabled = false; gpuButton.textContent = 'Use GPU';
+  startGpu();
 }
 loadSearchPreset();
+initializeGpu();
 document.body.classList.remove('booting');
 addEventListener('pageshow', loadSearchPreset);
 addEventListener('popstate', loadSearchPreset);

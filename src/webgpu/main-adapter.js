@@ -70,10 +70,13 @@ function positiveOrFallback(value, fallback) {
  *   worldScale?: number,
  *   cssWidth?: number,
  *   cssHeight?: number,
- *   dpr?: number
+ *   dpr?: number,
+ *   onDeviceLost?: (metadata: object) => void,
+ *   onUncapturedError?: (error: Error) => void
  * }} options
  * @returns {Promise<{
  *   stepMany(count?: number): number,
+ *   waitForIdle(): Promise<number | null>,
  *   render(): void,
  *   resetFromCpu(): object,
  *   configureFromCpu(): object,
@@ -91,6 +94,8 @@ export async function createWebGpuMainAdapter({
   cssWidth,
   cssHeight,
   dpr,
+  onDeviceLost,
+  onUncapturedError,
 } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas is required.');
 
@@ -116,6 +121,8 @@ export async function createWebGpuMainAdapter({
     palette,
     clearColor,
     worldScale: layout.worldScale,
+    onDeviceLost,
+    onUncapturedError,
   });
 
   function resetFromCpu() {
@@ -161,6 +168,7 @@ export async function createWebGpuMainAdapter({
 
   return Object.freeze({
     stepMany(count = 1) { return backend.stepMany(count); },
+    waitForIdle() { return backend.waitForIdle(); },
     render() { return backend.render(); },
     resetFromCpu,
     configureFromCpu,

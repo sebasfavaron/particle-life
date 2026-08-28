@@ -3,10 +3,10 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Particle Life Lab</title><style>body.booting>main,body.booting>aside{visibility:hidden}</style><link rel="stylesheet" href="src/style.css"></head>
 <body class="booting">
-<main><canvas id="world"></canvas><div id="hud"><b id="fps">— FPS</b><span id="frame">— ms</span><span id="pairs">uniform grid</span></div></main>
+<main><canvas id="world"></canvas><canvas id="worldGpu" hidden aria-label="Particle Life WebGPU canvas"></canvas><div id="hud"><b id="fps">— FPS</b><span id="frame">— ms</span><span id="pairs">uniform grid</span><span id="backend">CPU</span></div></main>
 <aside>
   <header><h1>Particle Life <button id="matrixHelp" class="help-button" type="button" aria-label="How Particle Life works" aria-haspopup="dialog">?</button></h1><p>Color rules become moving ecosystems.</p></header>
-  <section class="actions"><button id="pause">Pause</button><button id="reset">Reset particles</button><button id="scan">Scan ahead</button></section>
+  <section class="actions"><button id="pause">Pause</button><button id="reset">Reset particles</button><button id="scan">Scan ahead</button><button id="gpu" disabled title="WebGPU starts automatically when available">GPU unavailable</button></section>
   <section class="controls" id="controls">
     <label><span>Seed <span class="info-icon">ⓘ<span class="tip">Deterministic seed. Same seed + settings = same evolution</span></span></span> <input id="seed" type="text" value="clusters"></label>
     <label><span>Particles <span class="info-icon">ⓘ<span class="tip">Total particles. More = richer patterns but slower</span></span></span> <output id="countOut"></output><input id="count" type="range" min="1000" max="30000" step="1000" value="2000"></label>
