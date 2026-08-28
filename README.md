@@ -60,6 +60,14 @@ upper-left HUD and is available as `window.__particleLifeMetrics`.
 Default exploration starts with radius 80, damping 0.82, force 0.025, `dt` 1, and speed 4.
 Reduce radius before raising particle count because neighbor density grows with radius².
 
+## Share URLs
+
+- Default state uses no query string.
+- Changed scalars use short readable fields, for example `?f=0.04&v=7`.
+- Matrix and mass edits use `x` and `m` deltas against the deterministic seed/type matrix.
+- A fully edited matrix switches to compact `b` binary data. It is base64url, has no percent escapes, and preserves each rule within `1/32767`.
+- Old `?preset=` JSON links still load.
+
 ## Source selection
 
 Reviewed on 2026-08-23 at the pinned revisions below.

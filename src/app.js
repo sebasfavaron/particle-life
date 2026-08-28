@@ -1,4 +1,5 @@
 import { ParticleLife } from './engine.js';
+import { decodeShareUrl, encodeShareUrl } from './share-url.js';
 import { SavedPresetStore } from './saved-presets.js';
 import { createWebGpuMainAdapter } from './webgpu/main-adapter.js';
 
@@ -268,9 +269,7 @@ function exportCurrentPreset() {
 }
 // update URL bar to reflect current preset
 function updateURL() {
-  const json = JSON.stringify(exportCurrentPreset());
-  const url = location.origin + location.pathname + '?preset=' + encodeURIComponent(json);
-  history.replaceState(null, '', url);
+  history.replaceState(null, '', encodeShareUrl(exportCurrentPreset(), location.href));
 }
 // debounced auto-update on any change
 let urlDirty = false;
@@ -543,15 +542,12 @@ function applyPreset(data, { persist = false } = {}) {
   if(persist) scheduleURL();
 }
 function loadSearchPreset(){
-  const q = new URLSearchParams(location.search);
-  const raw = q.get('preset');
-  console.log('LOAD: search='+location.search+' hasPreset='+!!raw);
-  if(raw) try {
-    const data = JSON.parse(raw);
-    console.log('Preset loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+(data.matrix?data.matrix.length+'x'+data.matrix[0].length:'BAD'));
+  if(location.search) try {
+    const data = decodeShareUrl(location.href);
+    console.log('Share URL loaded: classes='+data.classes+' count='+data.particleCount+' seed='+data.seed+' matrix='+data.matrix.length+'x'+data.matrix[0].length);
     applyPreset(data);
     return;
-  } catch(e){ console.warn('Invalid preset URL', e); }
+  } catch(e){ console.warn('Invalid share URL', e); }
   syncControls();
   syncForcesButton();
   resetGpuFromCpu();
