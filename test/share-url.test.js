@@ -12,7 +12,7 @@ function core(data) {
   return {
     seed: data.seed, particleCount: data.particleCount, classes: data.classes, interactionRadius: data.interactionRadius,
     damping: data.damping, force: data.force, dt: data.dt, wrap: data.wrap, speed: data.speed, zoom: data.zoom,
-    showForces: data.showForces, masses: data.masses, matrix: data.matrix,
+    showForces: data.showForces, creatureEnergy: data.creatureEnergy, masses: data.masses, matrix: data.matrix,
   };
 }
 
@@ -50,6 +50,12 @@ test('arbitrary seed text uses base64url, never percent escapes', () => {
   assert.match(url, /\?s=~[A-Za-z0-9_-]+$/);
   assert.ok(!url.includes('%'));
   assert.equal(decodeShareUrl(url).seed, preset.seed);
+});
+test('creature energy is an opt-in compact share field', () => {
+  const preset = exported(); preset.creatureEnergy = true;
+  const url = encodeShareUrl(preset, base);
+  assert.equal(url, `${base}?g=1`);
+  assert.equal(decodeShareUrl(url).creatureEnergy, true);
 });
 test('legacy JSON preset URLs continue to load', () => {
   const preset = exported({ types: 2, seed: 'legacy' });

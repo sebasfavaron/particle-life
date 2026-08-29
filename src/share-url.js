@@ -2,7 +2,7 @@ import { ParticleLife } from './engine.js';
 
 export const SHARE_DEFAULTS = Object.freeze({
   version: 1, seed: 'clusters', particleCount: 5000, classes: 40, interactionRadius: 80,
-  damping: .82, force: .025, dt: 1, wrap: true, speed: 4, zoom: 1, showForces: false,
+  damping: .82, force: .025, dt: 1, wrap: true, speed: 4, zoom: 1, showForces: false, creatureEnergy: false,
 });
 const SAFE_TEXT = /^[A-Za-z0-9._~-]+$/;
 const SCALARS = [
@@ -114,6 +114,7 @@ export function encodeShareUrl(data, baseUrl) {
   }
   if (Boolean(data.wrap ?? SHARE_DEFAULTS.wrap) !== SHARE_DEFAULTS.wrap) parts.push('w=0');
   if (Boolean(data.showForces ?? SHARE_DEFAULTS.showForces) !== SHARE_DEFAULTS.showForces) parts.push('a=1');
+  if (Boolean(data.creatureEnergy ?? SHARE_DEFAULTS.creatureEnergy)) parts.push('g=1');
   const matrix = data.matrix.flat();
   const matrixDeltas = [];
   for (let index = 0; index < matrix.length; index++) {
@@ -154,6 +155,7 @@ export function decodeShareUrl(input) {
     zoom: readNumber(params, 'z', SHARE_DEFAULTS.zoom, { min: .25, max: 5 }),
     wrap: params.get('w') !== '0',
     showForces: params.get('a') === '1',
+    creatureEnergy: params.get('g') === '1',
     masses: Array(classes).fill(1),
     matrix: Array.from({ length: classes }, () => Array(classes).fill(0)),
   };

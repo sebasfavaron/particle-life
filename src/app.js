@@ -47,7 +47,7 @@ addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); })
 document.querySelector('aside').addEventListener('scroll', () => { if(tooltipIcon) placeTooltip(tooltipIcon); });
 const stage = document.querySelector('main');
 const canvas = $('world'), gpuCanvas = $('worldGpu'), ctx = canvas.getContext('2d', { alpha: false });
-const gpuButton = $('gpu'), backendHud = $('backend'), stepCountHud = $('stepCount');
+const gpuButton = $('gpu'), backendHud = $('backend'), stepCountHud = $('stepCount'), energyHud = $('energyHud');
 const palette = ['#66f2d5','#ff5577','#ffd166','#58a6ff','#c77dff','#ff8f40','#9cff57','#f55de1','#67e8f9','#f5f7ff','#ef476f','#06d6a0'];
 const DEFAULT_WORLD_SCALE = 1;
 const box = canvas.getBoundingClientRect();
@@ -63,6 +63,11 @@ let deliveredSteps = 0;
 function renderStepCount() { stepCountHud.textContent = `Steps ${formatStepCount(deliveredSteps)}`; }
 function recordSteps(count) { deliveredSteps += Math.max(0, Math.floor(count)); renderStepCount(); }
 function resetStepCount() { deliveredSteps = 0; renderStepCount(); }
+function syncCreatureEnergyUi() {
+  $('creatureEnergy').checked = sim.creatureEnergy;
+  const energy = sim.getCreatureEnergyMetrics();
+  energyHud.textContent = energy.enabled ? `Energy ${Math.round(energy.ambient)}% ambient · C ${energy.creatures}` : 'Energy off';
+}
 const MAX_FRAME_MS = 20; // safety budget per frame
 let stepTimeEstimate = 0; // ms per step (rolling avg), zero = uncalibrated
 let firstFrame = true;
@@ -115,6 +120,7 @@ function resetGpuFromCpu() {
   catch (error) { fallbackToCpu(`GPU reset failed: ${error.message}`); }
 }
 async function startGpu() {
+  if (sim.creatureEnergy) { setBackendStatus('CPU · Creature energy needs CPU'); return; }
   if (gpuActive || gpuStarting) return;
   if (!navigator.gpu || !isSecureContext) {
     fallbackToCpu('WebGPU needs a secure browser context and adapter');
@@ -241,6 +247,14 @@ forceControl.addEventListener('pointerleave', () => { forceSliderHovered = false
 forceControl.addEventListener('pointerdown', () => { forceSliderHeld = true; syncForcesButton(); });
 forceControl.addEventListener('blur', () => { forceSliderHeld = false; syncForcesButton(); });
 $('wrap').onchange=()=>{ sim.wrap=$('wrap').checked; syncGpuConfiguration(); scheduleURL(); };
+$('creatureEnergy').onchange=()=>{
+  const enabled = $('creatureEnergy').checked;
+  if (enabled && gpuActive) fallbackToCpu('Creature energy needs CPU');
+  sim.setCreatureEnergy(enabled);
+  syncCreatureEnergyUi();
+  if (!enabled) initializeGpu();
+  scheduleURL();
+};
 /* Nudge parameters: can cause crashes, investigate later.
 $('nudge').onclick=()=>{
   const steps = { count: 1000, radius: 2, damping: 0.02, force: 0.005, dt: 0.1 };
@@ -494,8 +508,9 @@ function loop(now) {
     const fps=frames*1000/(now-sampleAt);
     $('fps').textContent=`${fps.toFixed(0)} FPS`;
     $('frame').textContent=gpuActive ? `GPU ${gpuFramePending ? 'busy' : 'ready'}` : `${(frameSum/frames).toFixed(1)} ms`;
-    $('pairs').textContent=`${sim.count.toLocaleString()} ${stepsPerFrame>1?'· steps='+stepsPerFrame:''}`;
-    window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows],backend:gpuActive?'webgpu':'cpu',gpuBusy:gpuFramePending};
+    $('pairs').textContent=`${sim.count.toLocaleString()} ${stepsPerFrame>1?'· target='+stepsPerFrame:''}`;
+    syncCreatureEnergyUi();
+    window.__particleLifeMetrics={fps,ms:frameSum/frames,count:sim.count,grid:[sim.cols,sim.rows],backend:gpuActive?'webgpu':'cpu',gpuBusy:gpuFramePending,energy:sim.getCreatureEnergyMetrics()};
     frames=0;frameSum=0;sampleAt=now;
   }
   // Calibrate CPU step time only. GPU queue completion is tracked separately.
@@ -507,6 +522,7 @@ function loop(now) {
 
 resize(); // sync pre-resize — ensures fill covers canvas
 syncZoomLabel();
+syncCreatureEnergyUi();
 window.particleLife=sim;
 // Hidden tabs skip rendering and spend the saved time on physics. Browsers can still throttle
 // timers, but each delivered callback advances as far as a near-full-core work budget allows.
@@ -538,6 +554,7 @@ if(document.hidden) startBackgroundSteps();
 function applyPreset(data, { persist = false } = {}) {
   if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
   sim.importPreset(data); resetStepCount();
+  if (sim.creatureEnergy && gpuActive) fallbackToCpu('Creature energy needs CPU');
   if(Number.isFinite(Number(data.speed))) {
     stepsPerFrame = Number(data.speed);
     $('speed').value = stepsPerFrame;
@@ -545,6 +562,7 @@ function applyPreset(data, { persist = false } = {}) {
   }
   if(typeof data.showForces === 'boolean') showForces = data.showForces;
   syncControls();
+  syncCreatureEnergyUi();
   syncForcesButton();
   resetGpuFromCpu();
   if(persist) scheduleURL();
@@ -561,6 +579,12 @@ function loadSearchPreset(){
   resetGpuFromCpu();
 }
 function initializeGpu() {
+  if(sim.creatureEnergy) {
+    gpuButton.disabled = true; gpuButton.textContent = 'GPU disabled by energy';
+    gpuButton.title = 'Creature energy currently runs on CPU';
+    setBackendStatus('CPU · Creature energy');
+    return;
+  }
   if(!navigator.gpu || !isSecureContext) {
     gpuButton.disabled = true; gpuButton.textContent = 'GPU unavailable';
     gpuButton.title = 'WebGPU needs a secure browser context and adapter';

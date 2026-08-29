@@ -23,6 +23,7 @@ No install or bundle step. You can also use `python3 -m http.server 4173`.
 - Edit any matrix cell live. **Row particles feel column particles**.
 - `+1`: strong attraction. `0`: neutral. `-1`: strong repulsion.
 - Change color classes (2–40), particles (1k–30k), radius (10–360), damping, force, `dt`, and edge wrap.
+- Enable **Creature energy** to detect compact mixed-color groups every 10 steps. Total energy stays at 100%; activity moves energy to ambient space and incoming particles transfer ambient energy into a creature.
 - Set a seed, then **Randomize matrix**. The same seed and class count produce the same matrix.
 - **Download JSON** saves every important parameter. **Load JSON** restores it.
 - `Space` pauses. `R` randomizes.

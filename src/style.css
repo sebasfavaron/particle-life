@@ -20,6 +20,7 @@ canvas[hidden] { display: none; }
   color: #9db0ca; font-size: calc(12px * var(--ui));
 }
 #hud b { color: #8ef0c7; }
+#energyHud { color: #ffd166; }
 aside { overflow: auto; padding: calc(18px * var(--ui)); background: #0c1018; border-left: 1px solid #26334b; position: relative; z-index: 1; }
 header { margin-bottom: calc(14px * var(--ui)); }
 h1 { font-size: calc(21px * var(--ui)); margin: 0; color: #fff; }

@@ -14,6 +14,12 @@ export class ParticleLife {
     this.seed = String(options.seed ?? 'clusters');
     this.cellScale = options.cellScale === 0.5 || options.cellScale === 1 ? options.cellScale : null;
     this.beta = 0.3;
+    this.creatureEnergy = Boolean(options.creatureEnergy ?? false);
+    this.energyTotal = 100;
+    this.energyDetectionInterval = 10;
+    this.creatureMinSize = 24;
+    this.creatureLinkScale = 0.14;
+    this.energyCost = 0.00003;
     this.matrix = new Float32Array(this.types * this.types);
     this.masses = new Float32Array(this.types);
     for (let t = 0; t < this.types; t++) this.masses[t] = 1;
@@ -86,6 +92,120 @@ export class ParticleLife {
     const cursor = offsets.slice(0, this.types);
     for (let i = 0; i < n; i++) this.drawOrder[cursor[this.kind[i]]++] = i;
     this.rebuildGridStorage();
+    this.resetCreatureEnergy();
+  }
+
+  resetCreatureEnergy() {
+    this.particleCreature = new Int32Array(this.count); this.particleCreature.fill(-1);
+    this.energyScale = new Float32Array(this.count); this.energyScale.fill(1);
+    this.creatures = new Map(); this.ambientEnergy = this.energyTotal;
+    this.energyStep = 0; this.nextCreatureId = 1; this.energyInitialized = false;
+  }
+
+  setCreatureEnergy(enabled) {
+    const next = Boolean(enabled);
+    if (next === this.creatureEnergy) return;
+    this.creatureEnergy = next;
+    this.resetCreatureEnergy();
+  }
+
+  getCreatureEnergyMetrics() {
+    let creatureEnergy = 0;
+    for (const creature of this.creatures.values()) creatureEnergy += creature.energy;
+    return { enabled: this.creatureEnergy, creatures: this.creatures.size, ambient: this.ambientEnergy,
+      creatureEnergy, total: this.ambientEnergy + creatureEnergy };
+  }
+
+  refreshEnergyScale() {
+    this.energyScale.fill(1);
+    if (!this.creatureEnergy) return;
+    const nominal = this.energyTotal / Math.max(1, this.count);
+    for (let i = 0; i < this.count; i++) {
+      const creature = this.creatures.get(this.particleCreature[i]);
+      if (creature) this.energyScale[i] = Math.max(0.15, Math.min(1.25, creature.energy / Math.max(1, creature.size) / nominal));
+    }
+  }
+
+  detectCreatures() {
+    const { count, radius, cellSize, cols, rows, wrap, width, height, head, next } = this;
+    const linkRadius = Math.max(1, radius * this.creatureLinkScale), link2 = linkRadius * linkRadius;
+    const range = Math.ceil(linkRadius / cellSize), parent = new Int32Array(count), sizes = new Int32Array(count);
+    for (let i = 0; i < count; i++) { parent[i] = i; sizes[i] = 1; }
+    const find = value => { let root = value; while (parent[root] !== root) root = parent[root]; while (parent[value] !== value) { const above = parent[value]; parent[value] = root; value = above; } return root; };
+    const unite = (a, b) => { let left = find(a), right = find(b); if (left === right) return; if (sizes[left] < sizes[right]) [left, right] = [right, left]; parent[right] = left; sizes[left] += sizes[right]; };
+    const marks = new Int32Array(head.length);
+    for (let i = 0; i < count; i++) {
+      const cx0 = Math.min(cols - 1, Math.max(0, Math.floor(this.x[i] / cellSize))), cy0 = Math.min(rows - 1, Math.max(0, Math.floor(this.y[i] / cellSize))), stamp = i + 1;
+      for (let oy = -range; oy <= range; oy++) {
+        let cy = cy0 + oy; if (wrap) cy = (cy + rows) % rows; else if (cy < 0 || cy >= rows) continue;
+        for (let ox = -range; ox <= range; ox++) {
+          let cx = cx0 + ox; if (wrap) cx = (cx + cols) % cols; else if (cx < 0 || cx >= cols) continue;
+          const cell = cy * cols + cx; if (marks[cell] === stamp) continue; marks[cell] = stamp;
+          for (let j = head[cell]; j !== -1; j = next[j]) {
+            if (j <= i) continue;
+            let dx = this.x[j] - this.x[i], dy = this.y[j] - this.y[i];
+            if (wrap) { if (dx > width * .5) dx -= width; else if (dx < -width * .5) dx += width; if (dy > height * .5) dy -= height; else if (dy < -height * .5) dy += height; }
+            if (dx * dx + dy * dy < link2) unite(i, j);
+          }
+        }
+      }
+    }
+    const roots = new Int32Array(count), rootSizes = new Int32Array(count), oldMembership = this.particleCreature;
+    for (let i = 0; i < count; i++) { const root = find(i); roots[i] = root; rootSizes[root]++; }
+    const byRoot = new Map();
+    for (let i = 0; i < count; i++) if (rootSizes[roots[i]] >= this.creatureMinSize) {
+      let component = byRoot.get(roots[i]);
+      if (!component) { component = { root: roots[i], size: rootSizes[roots[i]], previous: new Map(), id: null, energy: 0 }; byRoot.set(roots[i], component); }
+      const oldId = oldMembership[i]; if (oldId >= 0) component.previous.set(oldId, (component.previous.get(oldId) ?? 0) + 1);
+    }
+    const components = [...byRoot.values()];
+    if (!this.energyInitialized) {
+      for (const component of components) component.id = this.nextCreatureId++;
+      const unit = this.energyTotal / Math.max(1, count);
+      for (const component of components) component.energy = component.size * unit;
+    } else {
+      const claimed = new Set();
+      for (const component of [...components].sort((a, b) => b.size - a.size)) {
+        const candidate = [...component.previous.entries()].filter(([id]) => this.creatures.has(id) && !claimed.has(id)).sort((a, b) => b[1] - a[1])[0];
+        component.id = candidate ? candidate[0] : this.nextCreatureId++;
+        if (candidate) claimed.add(component.id);
+      }
+      for (const [oldId, creature] of this.creatures) {
+        for (const component of components) {
+          const retained = component.previous.get(oldId) ?? 0;
+          if (retained) component.energy += creature.energy * retained / Math.max(1, creature.size);
+        }
+      }
+      let ambient = this.energyTotal - components.reduce((sum, component) => sum + component.energy, 0);
+      const unit = this.energyTotal / Math.max(1, count);
+      for (const component of components) {
+        const returning = [...component.previous.values()].reduce((sum, value) => sum + value, 0);
+        const bonus = Math.min(ambient, Math.max(0, component.size - returning) * unit);
+        component.energy += bonus; ambient -= bonus;
+      }
+    }
+    const assigned = new Int32Array(count); assigned.fill(-1); this.creatures = new Map();
+    for (const component of components) this.creatures.set(component.id, { id: component.id, size: component.size, energy: component.energy });
+    for (let i = 0; i < count; i++) { const component = byRoot.get(roots[i]); if (component) assigned[i] = component.id; }
+    this.particleCreature = assigned; this.energyInitialized = true;
+    let creatureEnergy = 0; for (const creature of this.creatures.values()) creatureEnergy += creature.energy;
+    this.ambientEnergy = Math.max(0, this.energyTotal - creatureEnergy);
+    this.refreshEnergyScale();
+  }
+
+  spendCreatureEnergy() {
+    if (!this.creatureEnergy || !this.creatures.size) return;
+    const costs = new Map();
+    for (let i = 0; i < this.count; i++) {
+      const id = this.particleCreature[i]; if (id < 0) continue;
+      const effort = Math.hypot(this.accX[i], this.accY[i]) + .05 * Math.hypot(this.vx[i], this.vy[i]);
+      costs.set(id, (costs.get(id) ?? 0) + effort * this.energyCost);
+    }
+    for (const [id, cost] of costs) {
+      const creature = this.creatures.get(id); const spent = Math.min(creature.energy, cost);
+      creature.energy -= spent; this.ambientEnergy += spent;
+    }
+    this.refreshEnergyScale();
   }
 
   resize(width, height) {
@@ -124,6 +244,7 @@ export class ParticleLife {
 
   step() {
     this.buildGrid();
+    if (this.creatureEnergy && this.energyStep++ % this.energyDetectionInterval === 0) this.detectCreatures();
     const { count, radius, width, height, cols, rows, types, matrix, masses, wrap } = this;
     const r2 = radius * radius, invR = 1 / radius, beta = this.beta;
     const scale = this.force * this.dt, damp = Math.pow(this.damping, this.dt);
@@ -181,8 +302,9 @@ export class ParticleLife {
     const move = this.dt;
     for (let i = 0; i < count; i++) {
       const forceX = accX[i], forceY = accY[i];
-      vx[i] = (vx[i] + forceX * scale / masses[kind[i]]) * damp;
-      vy[i] = (vy[i] + forceY * scale / masses[kind[i]]) * damp;
+      const creatureScale = this.creatureEnergy ? this.energyScale[i] : 1;
+      vx[i] = (vx[i] + forceX * scale * creatureScale / masses[kind[i]]) * damp;
+      vy[i] = (vy[i] + forceY * scale * creatureScale / masses[kind[i]]) * damp;
       fxOut[i] = forceX; fyOut[i] = forceY;
       let nx = x[i] + vx[i] * move, ny = y[i] + vy[i] * move;
       if (wrap) {
@@ -193,11 +315,12 @@ export class ParticleLife {
       }
       x[i] = nx; y[i] = ny;
     }
+    this.spendCreatureEnergy();
   }
   exportPreset() {
     return { version: 1, seed: this.seed, particleCount: this.count, classes: this.types,
       interactionRadius: this.radius, damping: this.damping, force: this.force, dt: this.dt,
-      wrap: this.wrap, masses: Array.from(this.masses),
+      wrap: this.wrap, creatureEnergy: this.creatureEnergy, masses: Array.from(this.masses),
       matrix: Array.from({ length: this.types }, (_, r) =>
         Array.from(this.matrix.slice(r * this.types, (r + 1) * this.types))) };
   }
@@ -211,6 +334,7 @@ export class ParticleLife {
     this.force = Number(data.force ?? this.force); this.dt = Number(data.dt ?? this.dt); this.wrap = Boolean(data.wrap ?? this.wrap);
     this.seed = String(data.seed ?? this.seed); this.matrix = Float32Array.from(data.matrix.flat().map(v => Math.max(-1, Math.min(1, Number(v)))));
     if (data.masses) { this.masses = Float32Array.from(data.masses); }
+    this.creatureEnergy = Boolean(data.creatureEnergy ?? false);
     this.resetParticles(this.seed);
   }
 }
