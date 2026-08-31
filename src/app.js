@@ -2,6 +2,7 @@ import { ParticleLife } from './engine.js';
 import { decodeShareUrl, encodeShareUrl } from './share-url.js';
 import { SavedPresetStore } from './saved-presets.js';
 import { formatStepCount } from './step-counter.js';
+import { canAdvanceInBackground } from './background-advance.js';
 import { createWebGpuMainAdapter } from './webgpu/main-adapter.js';
 
 const $ = id => document.getElementById(id);
@@ -57,7 +58,7 @@ const savedPresetStore = new SavedPresetStore({
   getItem(key) { return localStorage.getItem(key); },
   setItem(key, value) { localStorage.setItem(key, value); },
 });
-let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 4, scanning = false, showForces = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
+let running = true, last = performance.now(), sampleAt = last, frames = 0, frameSum = 0, stepsPerFrame = 4, scanning = false, showForces = false, advanceInBackgroundEnabled = false, worldScale = DEFAULT_WORLD_SCALE, baseW = 1200, baseH = 800;
 let gpu = null, gpuActive = false, gpuStarting = false, gpuFramePending = false;
 let deliveredSteps = 0;
 function renderStepCount() { stepCountHud.textContent = `Steps ${formatStepCount(deliveredSteps)}`; }
@@ -254,6 +255,11 @@ $('creatureEnergy').onchange=()=>{
   syncCreatureEnergyUi();
   if (!enabled) initializeGpu();
   scheduleURL();
+};
+$('backgroundAdvance').onchange=()=>{
+  advanceInBackgroundEnabled = $('backgroundAdvance').checked;
+  if (document.hidden && advanceInBackgroundEnabled) startBackgroundSteps();
+  else stopBackgroundSteps();
 };
 /* Nudge parameters: can cause crashes, investigate later.
 $('nudge').onclick=()=>{
@@ -484,7 +490,7 @@ function queueGpuStep(count, { render = !document.hidden } = {}) {
 function loop(now) {
   if(firstFrame){ firstFrame=false; resize(); }
   const start=performance.now();
-  if(running && !scanning) {
+  if(running && !scanning && (!document.hidden || advanceInBackgroundEnabled)) {
     if(gpuActive) {
       queueGpuStep(document.hidden ? 1 : Math.max(1, stepsPerFrame));
     } else {
@@ -529,7 +535,7 @@ window.particleLife=sim;
 const BACKGROUND_STEP_MS = 100, BACKGROUND_WORK_BUDGET_MS = 90, BACKGROUND_MAX_STEPS = 1000;
 let backgroundStepTimer = null;
 function advanceInBackground() {
-  if(!document.hidden || !running || scanning) return;
+  if(!canAdvanceInBackground({ hidden: document.hidden, running, scanning, enabled: advanceInBackgroundEnabled })) return;
   if(gpuActive) { queueGpuStep(Math.min(BACKGROUND_MAX_STEPS, Math.max(1, stepsPerFrame)), { render: false }); return; }
   const started = performance.now();
   let steps = 0;
@@ -547,10 +553,10 @@ function stopBackgroundSteps() {
   backgroundStepTimer = null;
 }
 addEventListener('visibilitychange', ()=>{
-  if(document.hidden) startBackgroundSteps();
+  if(document.hidden && advanceInBackgroundEnabled) startBackgroundSteps();
   else { stopBackgroundSteps(); stepTimeEstimate = 0; }
 });
-if(document.hidden) startBackgroundSteps();
+if(document.hidden && advanceInBackgroundEnabled) startBackgroundSteps();
 function applyPreset(data, { persist = false } = {}) {
   if(Number.isFinite(Number(data.zoom))) setWorldScale(Number(data.zoom), { persist: false });
   sim.importPreset(data); resetStepCount();
